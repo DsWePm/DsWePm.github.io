@@ -17,7 +17,7 @@
 import { onMounted, computed } from 'vue'
 import { useDeviceStore } from '@/stores/device'
 import Preloader from '@/components/layout/Preloader.vue'
-import Sidebar from '@/components/layout/Sidebar/Sidebar.vue'
+import Sidebar from '@/components/layout/desktop/sidebar/Sidebar.vue'
 import TopbarDesktop from '@/components/layout/TopbarDesktop.vue'
 
 

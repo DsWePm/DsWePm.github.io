@@ -42,7 +42,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { menuItems } from '@/components/layout/Sidebar/menuItems'
+import { menuItems } from '@/components/layout/data/bar_menu/menuItems'
 
 const hoverIndex = ref<number | null>(null)
 </script>

@@ -15,7 +15,7 @@
 </template>
 
 <script setup lang="ts">
-import { menuItems } from '@/components/layout/Sidebar/menuItems'
+import { menuItems } from '@/components/layout/data/bar_menu/menuItems'
 </script>
 
 <style scoped>
