@@ -18,7 +18,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useUIStore } from '@/stores/ui';
-import { menuItems } from './menuItems';
+import { menuItems } from '@/components/layout/data/bar_menu/menuItems';
 
 const uiStore = useUIStore();
 

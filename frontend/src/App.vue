@@ -6,7 +6,10 @@
     />
         <div
       class="page-content"
-      :class="{ 'with-topbar': currentLayout==TopbarDesktop }"
+      :class="{
+        'with-topbar': currentLayout==TopbarDesktop,
+        'with-sidebar': currentLayout === Sidebar && !device.isMobile
+       }"
     >
       <RouterView />
     </div>
@@ -17,8 +20,8 @@
 import { onMounted, computed } from 'vue'
 import { useDeviceStore } from '@/stores/device'
 import Preloader from '@/components/layout/Preloader.vue'
-import Sidebar from '@/components/layout/desktop/sidebar/Sidebar.vue'
-import TopbarDesktop from '@/components/layout/TopbarDesktop.vue'
+import Sidebar from '@/components/layout/Sidebar.vue'
+import TopbarDesktop from '@/components/layout/desktop/TopbarDesktop.vue'
 
 
 const device = useDeviceStore()
@@ -48,5 +51,9 @@ const currentLayout = computed(() => {
 
 .page-content.with-topbar {
   padding-top: 60px; /* 只在 TopbarDesktop 显示时添加 */
+}
+
+.page-content.with-sidebar {
+    margin-left: var(--sidebar-width, 400px); /* 只在 TopbarDesktop 显示时添加 */
 }
 </style>

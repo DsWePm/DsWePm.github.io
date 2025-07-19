@@ -6,8 +6,6 @@
         <source src="@/assets/video/test.mp4" type="video/mp4" />
         Your browser does not support the video tag.
       </video>
-      <!-- 或者使用GIF -->
-      <!-- <img src="@/assets/img/2.gif" alt="Background GIF" /> -->
     </div>
 
     <!-- 毛玻璃遮罩和内容 -->
@@ -17,6 +15,7 @@
           <img src="~@/assets/logo/light.png" alt="Logo" />
         </RouterLink>
       </div>
+
       <nav class="menu">
         <ul @mouseleave="hoverIndex = null">
           <li
@@ -32,8 +31,12 @@
           </li>
         </ul>
       </nav>
+
       <div class="copyright">
-        <p>Copyright &copy; 2025. <a target="_blank" href="https://github.com/DsWePm">DWP</a></p>
+        <p>
+          Copyright &copy; 2025.
+          <a target="_blank" href="https://github.com/DsWePm">DWP</a>
+        </p>
       </div>
     </div>
   </aside>
@@ -48,15 +51,16 @@ const hoverIndex = ref<number | null>(null)
 </script>
 
 <style scoped>
-/* 主容器 */
 .desktop-sidebar {
-  position: relative;
-  width: 400px;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: var(--sidebar-width, 400px);
   height: 100vh;
   overflow: hidden;
+  z-index: 1000;
 }
 
-/* 背景媒体层（GIF 或视频） */
 .background-media {
   position: absolute;
   top: 0;
@@ -74,7 +78,6 @@ const hoverIndex = ref<number | null>(null)
   object-fit: cover;
 }
 
-/* 毛玻璃内容层 */
 .blur-layer {
   position: relative;
   z-index: 1;
@@ -88,34 +91,56 @@ const hoverIndex = ref<number | null>(null)
   border-right: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   flex-direction: column;
+  align-items: center; /* 水平居中所有子元素 */
   color: #fff;
   box-shadow: 4px 0 12px rgba(0, 0, 0, 0.4);
 }
 
-/* Logo 样式 */
+/* Logo 区域 - 上边留白并水平居中 */
 .logo {
-  margin-top: 10%;
-  margin-bottom: auto;
+  flex: 0 0 auto;
+  margin-top: 5vh; /* 视口高度的 5% 自适应留白 */
+  margin-bottom: 40px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
 }
 
 .logo img {
-  max-width: 100%;
+  max-width: 70%;
+  height: auto;
   filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.2));
 }
 
-/* 菜单 */
+/* Menu 主体自适应居中区域 */
+.menu {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* 水平居中 */
+  justify-content: center; /* 垂直居中 */
+  overflow-y: auto;
+  padding: 0 10px;
+}
+
 .menu ul {
   list-style: none;
   padding: 0;
   margin: 0;
-  flex: 1;
-  overflow-y: auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* 水平居中 */
 }
 
 .menu li {
   text-align: center;
   margin: 15px 0;
   transition: all 0.3s ease;
+  width: 100%;
+  max-width: 260px;
 }
 
 .menu a {
@@ -127,29 +152,31 @@ const hoverIndex = ref<number | null>(null)
   border-radius: 8px;
   transition: all 0.3s ease;
   font-size: 16px;
+  text-align: center;
 }
 
-/* 聚焦效果：当前项 */
+/* 活跃状态放大加粗 */
 .menu li.active a {
   font-size: 20px;
   font-weight: 700;
   color: #fff;
 }
 
-/* 非选中项变小且轻微模糊 */
+/* hover 淡出效果 */
 .menu li.faded a {
   transform: scale(0.9);
   filter: blur(1px);
   opacity: 0.5;
 }
 
-/* 页脚版权 */
+/* 页脚版权始终在底部并水平居中 */
 .copyright {
-  margin-top: auto;
+  flex: 0 0 auto;
   font-size: 13px;
   text-align: center;
   color: #aaa;
   padding-top: 15px;
   border-top: 1px solid rgba(255, 255, 255, 0.05);
+  width: 100%;
 }
 </style>

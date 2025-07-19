@@ -18,8 +18,8 @@
 import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useDeviceStore } from '@/stores/device'
 import { useUIStore } from '@/stores/ui'
-import SidebarDesktop from './SidebarDesktop.vue'
-import SidebarMobile from './SidebarMobile.vue'
+import SidebarDesktop from '@/components/layout/desktop/SidebarDesktop.vue'
+import SidebarMobile from '@/components/layout/mobile/SidebarMobile.vue'
 
 const device = useDeviceStore()
 const uiStore = useUIStore()
