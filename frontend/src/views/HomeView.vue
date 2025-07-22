@@ -12,7 +12,7 @@
 </template>
 
 <script setup lang="ts">
-import HeroSection from '@/components/sections/desktop/HeroSection.vue'
+import HeroSection from '@/components/sections/HeroSection.vue'
 import AboutSection from '@/components/sections/desktop/AboutSection.vue'
 import PortfolioSection from '@/components/sections/desktop/PortfolioSection.vue'
 import SkillsSection from '@/components/sections/desktop/SkillsSection.vue'

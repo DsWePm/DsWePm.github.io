@@ -3,6 +3,10 @@
     <div v-if="show" class="preloader" @click="createRipple">
       <div class="background">
         <!-- 可选背景视频、GIF 或图片 -->
+         <video autoplay muted loop>
+          <source src="@/assets/video/snowyforest-showcase1-f.mp4" type="video/mp4">
+          Your browser does not support the video tag.
+        </video>
       </div>
       <div class="typing-wrap">
         <h1 class="typing">{{ displayText }}<span class="cursor">|</span></h1>
@@ -19,7 +23,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useUIStore } from '@/stores/ui'
 
 const uiStore = useUIStore()
@@ -133,6 +137,12 @@ onMounted(() => {
   typeText(initialText, () => {
     startCycle()
   })
+
+onUnmounted(() => {
+  clearTimeout(typingTimeout)
+  clearTimeout(waitingTimeout)
+})
+
 })
 </script>
 
