@@ -5,6 +5,8 @@ import DivergenceShader from "@/webGPU/fluid/shaders/divergence.wgsl?raw";
 import JacobiShader from "@/webGPU/fluid/shaders/jacobi.wgsl?raw";
 import GradientShader from "@/webGPU/fluid/shaders/gradient.wgsl?raw";
 
+const WORKGROUP_SIZE = 8;
+
 export class FluidSimulation {
   device: GPUDevice;
   width: number;
@@ -37,7 +39,12 @@ export class FluidSimulation {
     this.divergence = createTexture(device, width, height);
 
     this.sampler = device.createSampler({ magFilter: "linear", minFilter: "linear" });
-    this.simParamBuffer = device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+
+    // buffer aligned to 32 bytes (2 vec4<f32>)
+    this.simParamBuffer = device.createBuffer({
+      size: 32,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
 
     this.advectionPipeline = this.loadComputePipeline("advection");
     this.divergencePipeline = this.loadComputePipeline("divergence");
@@ -63,33 +70,36 @@ export class FluidSimulation {
     });
   }
 
-  private dispatch(pipeline: GPUComputePipeline, bindings: Iterable<GPUBindGroupEntry>) {
-    const bindGroup = this.device.createBindGroup({
+  private createBindGroup(pipeline: GPUComputePipeline, bindings: Iterable<GPUBindGroupEntry>): GPUBindGroup {
+    return this.device.createBindGroup({
       layout: pipeline.getBindGroupLayout(0),
       entries: Array.from(bindings),
     });
+  }
+
+  private dispatch(pipeline: GPUComputePipeline, bindings: Iterable<GPUBindGroupEntry>) {
+    const bindGroup = this.createBindGroup(pipeline, bindings);
     const encoder = this.device.createCommandEncoder();
     const pass = encoder.beginComputePass();
     pass.setPipeline(pipeline);
     pass.setBindGroup(0, bindGroup);
-    pass.dispatchWorkgroups(Math.ceil(this.width / 8), Math.ceil(this.height / 8));
+    pass.dispatchWorkgroups(
+      Math.ceil(this.width / WORKGROUP_SIZE),
+      Math.ceil(this.height / WORKGROUP_SIZE)
+    );
     pass.end();
     this.device.queue.submit([encoder.finish()]);
   }
 
-  step() {
+  private updateSimParams(dt: number = 0.016, alpha: number = -1.0, rBeta: number = 0.25) {
     const texelSize = [1 / this.width, 1 / this.height];
-    const dt = 0.016;
-    const alpha = -1;
-    const rBeta = 0.25;
+    const params = new Float32Array(8); // 2 vec4<f32>
+    params.set([...texelSize, dt, 0], 0); // vec4(texelSize, dt, pad)
+    params.set([alpha, rBeta, 0, 0], 4);  // vec4(alpha, rBeta, pad, pad)
+    this.device.queue.writeBuffer(this.simParamBuffer, 0, params);
+  }
 
-    this.device.queue.writeBuffer(
-      this.simParamBuffer,
-      0,
-      new Float32Array([...texelSize, dt, 0, alpha, rBeta])
-    );
-
-    // 1. Advect velocity
+  private advectVelocity() {
     this.dispatch(this.advectionPipeline, [
       { binding: 0, resource: this.velocity.createView() },
       { binding: 1, resource: this.velocity.createView() },
@@ -98,8 +108,9 @@ export class FluidSimulation {
       { binding: 4, resource: this.sampler },
     ]);
     [this.velocity, this.velocityPrev] = [this.velocityPrev, this.velocity];
+  }
 
-    // 2. Advect dye
+  private advectDye() {
     this.dispatch(this.advectionPipeline, [
       { binding: 0, resource: this.dye.createView() },
       { binding: 1, resource: this.velocity.createView() },
@@ -108,16 +119,18 @@ export class FluidSimulation {
       { binding: 4, resource: this.sampler },
     ]);
     [this.dye, this.dyePrev] = [this.dyePrev, this.dye];
+  }
 
-    // 3. Compute divergence
+  private computeDivergence() {
     this.dispatch(this.divergencePipeline, [
       { binding: 0, resource: this.velocity.createView() },
       { binding: 1, resource: this.divergence.createView() },
       { binding: 2, resource: { buffer: this.simParamBuffer } },
     ]);
+  }
 
-    // 4. Solve pressure (Jacobi iterations)
-    for (let i = 0; i < 20; i++) {
+  private solvePressure(iterations: number = 20) {
+    for (let i = 0; i < iterations; i++) {
       this.dispatch(this.jacobiPipeline, [
         { binding: 0, resource: this.pressure.createView() },
         { binding: 1, resource: this.divergence.createView() },
@@ -126,8 +139,9 @@ export class FluidSimulation {
       ]);
       [this.pressure, this.pressurePrev] = [this.pressurePrev, this.pressure];
     }
+  }
 
-    // 5. Subtract pressure gradient
+  private subtractPressureGradient() {
     this.dispatch(this.gradientPipeline, [
       { binding: 0, resource: this.velocity.createView() },
       { binding: 1, resource: this.pressure.createView() },
@@ -135,5 +149,15 @@ export class FluidSimulation {
       { binding: 3, resource: { buffer: this.simParamBuffer } },
     ]);
     [this.velocity, this.velocityPrev] = [this.velocityPrev, this.velocity];
+  }
+
+  step() {
+    this.updateSimParams();
+
+    this.advectVelocity();
+    this.advectDye();
+    this.computeDivergence();
+    this.solvePressure();
+    this.subtractPressureGradient();
   }
 }

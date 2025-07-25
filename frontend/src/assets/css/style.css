@@ -63,6 +63,26 @@ img {
   background-color: #244ed9;
 }
 
+/* 适用于整个页面 */
+::-webkit-scrollbar {
+  width: 10px; /* 垂直滚动条宽度 */
+  height: 10px; /* 水平滚动条高度 */
+}
+
+::-webkit-scrollbar-track {
+  background: #ffffff; /* 轨道背景色 */
+}
+
+::-webkit-scrollbar-thumb {
+  background: #00ffdd; /* 滚动条颜色 */
+  border-radius: 0;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #ff0000; /* 悬停颜色 */
+}
+
+
 /* ==========================================================================  
    App Layout
    ========================================================================== */

@@ -1,6 +1,6 @@
 ﻿<!-- src/components/sections/HeroSection.vue -->
 <template>
-  <div>
+  <div id="home" class="hero-section">
     <div class="canvas-container">
       <canvas ref="canvasRef" class="fullscreen-canvas"></canvas>
       <div v-if="!webgpuStore.isSupported" class="fallback">
@@ -62,6 +62,17 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.hero-section {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #fffdfd; /* 可选：设置背景颜色 */
+  overflow: hidden; /* 确保内容不溢出 */
+}
+
 .fullscreen-canvas {
   width: 100%;      /* 改为 100%，填满父元素宽度 */
   height: 100vh;    /* 保持高度100vh */

@@ -8,7 +8,7 @@
     <nav class="sidebar-menu">
       <ul class="menu-list">
         <li v-for="item in menuItems" :key="item.label">
-          <a :href="item.href">{{ item.label }}</a>
+          <a :href="item.href" @click="closeSidebar">{{ item.label }}</a>
         </li>
       </ul>
     </nav>
