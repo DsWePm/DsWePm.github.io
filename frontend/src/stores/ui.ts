@@ -1,4 +1,3 @@
-// src/store/ui.ts
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
@@ -24,12 +23,12 @@ export const useUIStore = defineStore('ui', () => {
   }
 
   return {
-    sidebarOpen, 
-    hamburgerPos, 
-    toggleSidebar, 
-    setHamburgerPos, 
-    closeSidebar, 
-    isPreloading, 
-    finishPreloading
+    sidebarOpen,
+    hamburgerPos,
+    toggleSidebar,
+    setHamburgerPos,
+    closeSidebar,
+    isPreloading,
+    finishPreloading,
   }
 })

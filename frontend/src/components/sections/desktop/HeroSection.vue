@@ -1,64 +1,12 @@
-﻿<!-- src/components/sections/HeroSection.vue -->
 <template>
-  <div id="home" class="hero-section">
-    <div class="canvas-container">
-      <canvas ref="canvasRef" class="fullscreen-canvas"></canvas>
-      <div v-if="!webgpuStore.isSupported" class="fallback">
-        WebGPU is not supported in this browser.
-      </div>
+  <section id="home" class="hero-section">
+    <div class="hero-content">
+      <h1>Hero Section</h1>
     </div>
-  </div>
+  </section>
 </template>
 
-
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
-import { useWebGPUStore } from '@/stores/WebGPU';
-import { initializeWebGPU } from '@/utils/WebGPU/initWebGPU';
-import { initRenderPipeline } from '@/utils/WebGPU/initWebGPUPipline';
-
-
-// Import Shaders
-import vertexShader from '@/WebGPU/shaders/vertexShaders/testTriangle.wgsl?raw'
-import fragmentShader from '@/WebGPU/shaders/fragmentShaders/testRed.wgsl?raw'
-
-
-const canvasRef = ref<HTMLCanvasElement | null>(null);
-const webgpuStore = useWebGPUStore();
-
-
-
-onMounted(async () => {
-  const canvas = canvasRef.value;
-  if (!canvas) {
-    console.error('Canvas element not found.');
-    return;
-  }
-
-  const result = await initializeWebGPU(canvas);
-  if (result === false) {
-    webgpuStore.setSupport(false);
-
-    // 备用绘制方案
-    
-    return;
-  }
-
-  webgpuStore.setSupport(true);
-
-  // WebGPU 渲染逻辑
-  const pipeline = await initRenderPipeline({
-    device: result.device,
-    format: result.format,
-    vertexShaderCode: vertexShader,    
-    fragmentShaderCode: fragmentShader 
-  });
-
-  
-  
-  
-
-});
 </script>
 
 <style scoped>
@@ -69,14 +17,12 @@ onMounted(async () => {
   display: flex;
   justify-content: center;
   align-items: center;
-  background-color: #fffdfd; /* 可选：设置背景颜色 */
-  overflow: hidden; /* 确保内容不溢出 */
+  background-color: #1a1a2e;
+  overflow: hidden;
 }
 
-.fullscreen-canvas {
-  width: 100%;      /* 改为 100%，填满父元素宽度 */
-  height: 100vh;    /* 保持高度100vh */
-  display: block;
-  box-sizing: border-box; /* 避免内边距导致溢出 */
+.hero-content {
+  color: #fff;
+  text-align: center;
 }
 </style>

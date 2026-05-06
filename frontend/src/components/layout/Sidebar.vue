@@ -1,16 +1,18 @@
 <template>
   <div>
-    <!-- 移动端菜单按钮 -->
     <transition name="fade">
-      <button v-if="!uiStore.isPreloading && device.isMobile" ref="hamburgerRef" class="menu-toggle"
-        :class="{ active: uiStore.sidebarOpen }" @click="uiStore.toggleSidebar" aria-label="Toggle Menu">
+      <button
+        v-if="!uiStore.isPreloading && device.isMobile"
+        ref="hamburgerRef"
+        class="menu-toggle"
+        :class="{ active: uiStore.sidebarOpen }"
+        @click="uiStore.toggleSidebar"
+        aria-label="Toggle Menu"
+      >
         <span class="hamburger-icon"></span>
       </button>
     </transition>
-
-
-    <!-- 使用移动或桌面 Sidebar -->
-    <component :is="device.isMobile ? SidebarMobile : SidebarDesktop" />
+    <SidebarMobile />
   </div>
 </template>
 
@@ -18,7 +20,6 @@
 import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useDeviceStore } from '@/stores/device'
 import { useUIStore } from '@/stores/ui'
-import SidebarDesktop from '@/components/layout/desktop/SidebarDesktop.vue'
 import SidebarMobile from '@/components/layout/mobile/SidebarMobile.vue'
 
 const device = useDeviceStore()
@@ -26,17 +27,15 @@ const uiStore = useUIStore()
 
 const hamburgerRef = ref<HTMLElement | null>(null)
 
-
 function updateHamburgerPos() {
   if (hamburgerRef.value) {
     const rect = hamburgerRef.value.getBoundingClientRect()
     uiStore.setHamburgerPos({
       x: rect.left + rect.width / 2,
-      y: rect.top + rect.height / 2
+      y: rect.top + rect.height / 2,
     })
   }
 }
-
 
 watch(() => device.isMobile, (isMobile) => {
   if (!isMobile) {
@@ -58,20 +57,17 @@ onUnmounted(() => {
 })
 </script>
 
-
 <style scoped>
 .menu-toggle {
   position: fixed;
   top: 10px;
   left: 10px;
   z-index: 9999;
-  /* 保证始终在最上层 */
   width: 40px;
   height: 40px;
   background: rgba(255, 255, 255, 0.8);
   border: none;
   border-radius: 50%;
-  /* 圆形背景 */
   cursor: pointer;
   display: flex;
   align-items: center;
