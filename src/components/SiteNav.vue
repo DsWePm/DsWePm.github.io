@@ -7,6 +7,7 @@ import { categoriesIn, entries, type Collection } from '../data/posts'
 import { years } from '../data/timeline'
 import { filters } from '../composables/filters'
 import { lang, theme, tr } from '../composables/prefs'
+import { switchFrom } from '../composables/switchFx'
 import NavMenu, { type MenuGroup } from './NavMenu.vue'
 
 const BASE = import.meta.env.BASE_URL
@@ -63,11 +64,12 @@ onBeforeUnmount(() => cancelAnimationFrame(raf))
       </template>
     </ul>
     <div class="tools">
-      <button type="button" class="lang" :title="lang === 'zh' ? 'Switch to English' : '切换到中文'" @click="lang = lang === 'zh' ? 'en' : 'zh'" v-magnetic="0.2">
+      <button type="button" class="lang" :aria-label="lang === 'zh' ? 'Switch to English' : '切换到中文'" data-cursor="quiet"
+              @click="switchFrom($event, () => (lang = lang === 'zh' ? 'en' : 'zh'))" v-magnetic="0.2">
         <span :class="{ on: lang === 'zh' }">中</span><i aria-hidden="true">/</i><span :class="{ on: lang === 'en' }">EN</span>
       </button>
-      <button type="button" class="mode" :aria-pressed="theme === 'dark'" :title="tr({ zh: '档案夜间模式', en: 'Night mode for the archive' })"
-              @click="theme = theme === 'dark' ? 'light' : 'dark'" v-magnetic="0.2">
+      <button type="button" class="mode" :aria-pressed="theme === 'dark'" :aria-label="tr({ zh: '档案夜间模式', en: 'Night mode for the archive' })" data-cursor="quiet"
+              @click="switchFrom($event, () => (theme = theme === 'dark' ? 'light' : 'dark'))" v-magnetic="0.2">
         <span aria-hidden="true">{{ theme === 'dark' ? '☾' : '☼' }}</span>{{ theme === 'dark' ? 'NIGHT' : 'DAY' }}
       </button>
     </div>

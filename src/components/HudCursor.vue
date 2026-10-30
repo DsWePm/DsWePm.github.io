@@ -2,12 +2,13 @@
 import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 
 // HUD cursor. A centred SVG reticle morphs by what is under the pointer
-// (data-cursor="link|button|slide|view|scan|text", or inferred from a/button/
+// (data-cursor="link|button|slide|view|scan|text|quiet", or inferred from a/button/
 // inputs). Brackets snap onto links, buttons and media; a short glitch plays on
 // every change of state. Elements with v-magnetic still lean toward it.
-type State = 'default' | 'link' | 'button' | 'slide' | 'view' | 'scan' | 'text'
-const LABELS: Record<State, string> = { default: '', link: 'LINK ↗', button: 'EXEC', slide: '◀ SLIDE ▶', view: 'VIEW', scan: 'SCAN', text: 'READ' }
-const LOCK: State[] = ['link', 'button', 'view']
+// quiet: a button that shows the button reticle but no label (the nav's switches)
+type State = 'default' | 'link' | 'button' | 'slide' | 'view' | 'scan' | 'text' | 'quiet'
+const LABELS: Record<State, string> = { default: '', link: 'LINK ↗', button: 'EXEC', slide: '◀ SLIDE ▶', view: 'VIEW', scan: 'SCAN', text: 'READ', quiet: '' }
+const LOCK: State[] = ['link', 'button', 'view', 'quiet']
 
 const enabled = ref(false)
 const state = ref<State>('default')
@@ -92,7 +93,7 @@ onBeforeUnmount(() => {
 
     <div class="box" :style="{ transform: `translate(${box.x}px, ${box.y}px)`, width: `${box.w}px`, height: `${box.h}px` }">
       <i class="c tl" /><i class="c tr" /><i class="c bl" /><i class="c br" />
-      <span v-if="box.locked" class="tag">◢ {{ LABELS[state] }}</span>
+      <span v-if="box.locked && LABELS[state]" class="tag">◢ {{ LABELS[state] }}</span>
     </div>
 
     <div class="reticle" :style="{ transform: `translate(${pos.x - 32}px, ${pos.y - 32}px)` }">
@@ -137,7 +138,7 @@ svg .fill { fill: currentColor; stroke: none; }
 svg .thin { stroke-width: 1; opacity: 0.6; }
 svg .dash { stroke-dasharray: 6 4; transform-origin: 32px 32px; animation: spin 6s linear infinite; }
 .g { opacity: 0; transform: scale(0.6) rotate(-45deg); transform-origin: 32px 32px; transition: opacity 0.18s, transform 0.35s var(--ease-out); }
-.s-default .g-default, .s-link .g-link, .s-button .g-button, .s-slide .g-slide,
+.s-default .g-default, .s-link .g-link, .s-button .g-button, .s-quiet .g-button, .s-slide .g-slide,
 .s-view .g-view, .s-scan .g-scan, .s-text .g-text { opacity: 1; transform: none; }
 
 /* glitch: a split, offset ghost for a fraction of a second on state change */

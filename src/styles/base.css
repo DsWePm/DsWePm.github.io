@@ -59,3 +59,8 @@ html { scrollbar-width: thin; scrollbar-color: rgba(80, 90, 95, 0.45) transparen
   html.has-scroll-hud { scrollbar-width: none; }
   html.has-scroll-hud::-webkit-scrollbar { display: none; }
 }
+
+/* night mode / 中 EN switch (composables/switchFx.ts): the new page is revealed by a clip
+   animated from script, so the default cross-fade is off */
+::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+.switch-fx { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 92; pointer-events: none; }
