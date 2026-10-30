@@ -63,4 +63,7 @@ html { scrollbar-width: thin; scrollbar-color: rgba(80, 90, 95, 0.45) transparen
 /* night mode / 中 EN switch (composables/switchFx.ts): the new page is revealed by a clip
    animated from script, so the default cross-fade is off */
 ::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
-.switch-fx { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 92; pointer-events: none; }
+.switch-fx { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 92; pointer-events: none; view-transition-name: switch-fx; }
+/* the dither canvas is its own live layer above both pages: no snapshot of it, no fade */
+::view-transition-group(switch-fx), ::view-transition-new(switch-fx) { animation: none; }
+::view-transition-old(switch-fx) { display: none; }

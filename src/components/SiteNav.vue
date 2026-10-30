@@ -69,7 +69,7 @@ onBeforeUnmount(() => cancelAnimationFrame(raf))
         <span :class="{ on: lang === 'zh' }">中</span><i aria-hidden="true">/</i><span :class="{ on: lang === 'en' }">EN</span>
       </button>
       <button type="button" class="mode" :aria-pressed="theme === 'dark'" :aria-label="tr({ zh: '档案夜间模式', en: 'Night mode for the archive' })" data-cursor="quiet"
-              @click="switchFrom($event, () => (theme = theme === 'dark' ? 'light' : 'dark'))" v-magnetic="0.2">
+              @click="switchFrom($event, () => (theme = theme === 'dark' ? 'light' : 'dark'), true)" v-magnetic="0.2">
         <span aria-hidden="true">{{ theme === 'dark' ? '☾' : '☼' }}</span>{{ theme === 'dark' ? 'NIGHT' : 'DAY' }}
       </button>
     </div>
