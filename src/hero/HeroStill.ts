@@ -6,8 +6,12 @@ const BASE = import.meta.env.BASE_URL
 const ASPECT = 16 / 9
 const PARALLAX = 0.016       // image-uv shift of the slab at full mouse deflection
 const PRELOAD = 24           // fall frames loaded before the hero counts as ready
-const AHEAD = 12             // fall frames decoded ahead of the scroll (and half as many behind)
-const KEEP = 20              // decoded frames further than this from the scroll are released
+const AHEAD = 10             // full-size fall frames decoded ahead of the one on screen
+const KEEP = 16              // full-size frames further than this from the screen are released
+// every fall frame is also kept small, for when the fall outruns the decoder (~80 full frames/s):
+// 640 x 360 (~230 MB) where there is memory for it, else 480 x 270 (~130 MB)
+const LOW = ((navigator as { deviceMemory?: number }).deviceMemory ?? 4) >= 8 ? [640, 360] : [480, 270]
+const BITMAP: ImageBitmapOptions = { imageOrientation: 'flipY', premultiplyAlpha: 'none', colorSpaceConversion: 'none' }
 const damp = (a: number, b: number, l: number, dt: number) => b + (a - b) * Math.exp(-l * dt)
 const smooth = (a: number, b: number, v: number) => { const t = Math.min(1, Math.max(0, (v - a) / (b - a))); return t * t * (3 - 2 * t) }
 
@@ -43,14 +47,18 @@ export class HeroStill {
   private frames: (Blob | null)[] = []      // encoded files; decoding all 254 would take ~2 GB
   // Uploading an <img> makes the browser decode it on the spot (~30 ms for a 1080p webp), so the
   // frames around the scroll are decoded ahead into ImageBitmaps; from a Blob that runs off the
-  // main thread (from an <img> it doesn't). Frame i lives
-  // in slot i % 2: stepping one frame re-uploads one texture, not both.
+  // main thread (from an <img> it doesn't). A fast fall can outrun that decoder, so a small copy of
+  // every frame stands in until the full one is ready: in motion it reads the same.
+  // Frame i lives in slot i % 2: stepping one frame re-uploads one texture, not both.
   private bitmaps = new Map<number, ImageBitmap>()
   private decoding = new Set<number>()
   private release: ImageBitmap[] = []
   private releasing = false
+  private lows: (ImageBitmap | null)[] = []
   private slots = [new THREE.Texture(), new THREE.Texture()]
   private slotFrame = [-1, -1]
+  private lowSlots = [new THREE.Texture(), new THREE.Texture()]
+  private lowFrame = [-1, -1]
   private target = 0          // frame the scroll asks for
   private shown = 0           // frame on screen (damped)
   private impactArmed = true
@@ -66,7 +74,7 @@ export class HeroStill {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5))   // full-screen shader: 2x costs ~1.8x the fill for little gain
     this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace    // images are already display-referred
     // bitmaps arrive flipped already (createImageBitmap below); WebGL ignores flipY for them
-    for (const t of this.slots) { t.colorSpace = THREE.NoColorSpace; t.minFilter = THREE.LinearFilter; t.generateMipmaps = false; t.flipY = false }
+    for (const t of [...this.slots, ...this.lowSlots]) { t.colorSpace = THREE.NoColorSpace; t.minFilter = THREE.LinearFilter; t.generateMipmaps = false; t.flipY = false }
     const black = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1); black.needsUpdate = true
     this.mat = new THREE.ShaderMaterial({
       vertexShader: quadVert, fragmentShader: heroFrag, depthTest: false,
@@ -94,7 +102,11 @@ export class HeroStill {
   private loadFrame(i: number) {
     return fetch(this.frameUrl(i))
       .then((r) => (r.ok ? r.blob() : null))
-      .then((b) => { this.frames[i] = b }, () => {})
+      .then(async (b) => {
+        this.frames[i] = b
+        if (b) this.lows[i] = await createImageBitmap(b, { ...BITMAP, resizeWidth: LOW[0], resizeHeight: LOW[1], resizeQuality: 'medium' })
+      })
+      .catch(() => {})
   }
 
   async load(onProgress: (p: number) => void) {
@@ -229,29 +241,42 @@ export class HeroStill {
     loop()
   }
 
-  private nearestDecoded(i: number) {
+  private ready(i: number) { return this.bitmaps.has(i) || !!this.lows[i] }
+
+  private nearestReady(i: number) {
     for (let d = 0; d < this.frames.length; d++) {
-      if (this.bitmaps.has(i - d)) return i - d
-      if (this.bitmaps.has(i + d)) return i + d
+      if (this.ready(i - d)) return i - d
+      if (this.ready(i + d)) return i + d
     }
     return -1
   }
 
-  /** decode the frames around `c` (more of them in the direction of travel), release the far ones */
-  private warm(c: number, down: boolean) {
+  /**
+   * decode full-size frames from the one on screen (`a`) towards the scroll target, nearest first;
+   * when the target is far ahead they are spread along the way instead of piling up behind it
+   */
+  private warm(a: number, target: number) {
     const n = this.frames.length
-    const lo = Math.max(0, c - (down ? AHEAD >> 1 : AHEAD)), hi = Math.min(n - 1, c + (down ? AHEAD : AHEAD >> 1))
-    for (let i = lo; i <= hi && this.decoding.size < 6; i++) {
+    const dir = target >= a ? 1 : -1
+    const stride = Math.max(1, Math.ceil(Math.abs(target - a) / AHEAD))
+    for (let k = 0; k <= AHEAD && this.decoding.size < 4; k++) {
+      const i = a + dir * (k < 2 ? k : 1 + (k - 1) * stride)      // the next frame always, for the crossfade
+      if (i < 0 || i >= n) break
       const blob = this.frames[i]
       if (!blob || this.bitmaps.has(i) || this.decoding.has(i)) continue
       this.decoding.add(i)
-      createImageBitmap(blob, { imageOrientation: 'flipY', premultiplyAlpha: 'none', colorSpaceConversion: 'none' })
+      createImageBitmap(blob, BITMAP)
         .then((b) => { this.bitmaps.set(i, b) })
         .catch(() => {})
         .finally(() => this.decoding.delete(i))
     }
     for (const [i, b] of this.bitmaps) {
-      if (Math.abs(i - c) > KEEP && !this.slotFrame.includes(i)) { this.bitmaps.delete(i); this.release.push(b) }
+      const ahead = (i - a) * dir
+      if (ahead >= -4 && ahead <= KEEP * stride) continue
+      // already uploaded if it sits in a slot; forget the slot so it is never reused without its bitmap
+      const k = this.slotFrame.indexOf(i)
+      if (k >= 0) this.slotFrame[k] = -1
+      this.bitmaps.delete(i); this.release.push(b)
     }
     // close() is slow-ish (a few ms each), so released frames are closed between frames
     if (this.release.length && !this.releasing) {
@@ -261,10 +286,13 @@ export class HeroStill {
     }
   }
 
-  /** the texture holding frame i, uploading it into its slot if it isn't there yet */
+  /** the texture holding frame i (full size if decoded, else the small copy), uploading it if needed */
   private bind(i: number) {
-    const k = i & 1, t = this.slots[k]
-    if (this.slotFrame[k] !== i) { t.image = this.bitmaps.get(i)!; t.needsUpdate = true; this.slotFrame[k] = i }
+    const k = i & 1
+    const full = this.bitmaps.get(i)
+    const [slots, at] = full ? [this.slots, this.slotFrame] : [this.lowSlots, this.lowFrame]
+    const t = slots[k]
+    if (at[k] !== i) { t.image = full ?? this.lows[i]!; t.needsUpdate = true; at[k] = i }
     return t
   }
 
@@ -272,9 +300,9 @@ export class HeroStill {
     const n = this.frames.length
     this.shown = Math.abs(this.target - this.shown) < 0.002 ? this.target : this.shown
     const a = Math.min(n - 1, Math.floor(this.shown)), b = Math.min(n - 1, a + 1)
-    this.warm(Math.round(this.target), this.target >= this.shown)
-    // not decoded yet (a fast flick): hold the nearest decoded frame rather than stall
-    const ia = this.nearestDecoded(a), ib = ia === a && this.bitmaps.has(b) ? b : ia
+    this.warm(a, this.target)
+    // a frame not even fetched yet (a flick right after load): hold the nearest one
+    const ia = this.nearestReady(a), ib = ia === a && this.ready(b) ? b : ia
     const u = this.mat.uniforms
     if (ia >= 0) { u.tFrameA.value = this.bind(ia); u.tFrameB.value = this.bind(ib) }
     // short crossfade between neighbours: mostly one sharp frame, never a double image
@@ -342,7 +370,7 @@ export class HeroStill {
 
   dispose() {
     cancelAnimationFrame(this.raf)
-    for (const b of [...this.bitmaps.values(), ...this.release]) b.close()
+    for (const b of [...this.bitmaps.values(), ...this.release, ...this.lows]) b?.close()
     this.rainVideo?.pause()
     this.renderer.dispose()
   }
