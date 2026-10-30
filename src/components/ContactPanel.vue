@@ -1,18 +1,18 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { ref } from 'vue'
 import { profile } from '../data/profile'
 import { brandIcons } from '../data/brandIcons'
 import ScrambleText from './ScrambleText.vue'
+import { useVisibleLoop } from '../composables/visibleLoop'
 
 const BARS = '▁▂▃▄▅▆▇'
 const wave = ref('')
 const copied = ref(false)
-let raf = 0
+const root = ref<HTMLElement>()
 let energy = 0.2
 
 function tick(t: number) {
-  raf = requestAnimationFrame(tick)
-  energy += (0.2 - energy) * 0.03
+  energy += (0.2 - energy) * 0.06
   let s = ''
   for (let i = 0; i < 64; i++) {
     const v = (Math.sin(i * 0.35 + t * 0.003) * 0.5 + 0.5) * energy + Math.random() * energy * 0.6
@@ -23,12 +23,11 @@ function tick(t: number) {
 async function copyEmail() {
   try { await navigator.clipboard.writeText(profile.email); copied.value = true; setTimeout(() => (copied.value = false), 1800) } catch { location.href = `mailto:${profile.email}` }
 }
-onMounted(() => { raf = requestAnimationFrame(tick) })
-onBeforeUnmount(() => cancelAnimationFrame(raf))
+useVisibleLoop(root, tick)
 </script>
 
 <template>
-  <div class="contact" @pointermove="energy = Math.min(1, energy + 0.02)">
+  <div ref="root" class="contact" @pointermove="energy = Math.min(1, energy + 0.02)">
     <ScrambleText text="OPEN A CHANNEL" as="p" class="big" />
     <pre class="wave" aria-hidden="true">{{ wave }}</pre>
     <div class="row">

@@ -1,19 +1,18 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { ref } from 'vue'
 import { profile } from '../data/profile'
 import { tr } from '../composables/prefs'
+import { useVisibleLoop } from '../composables/visibleLoop'
 
 // "Subject portrait": an ASCII noise field that sharpens around the pointer.
 const W = 34, H = 18
 const RAMP = ' .·:-=+*#%@'
 const portrait = ref('')
+const root = ref<HTMLElement>()
 let mx = -1, my = -1
-let raf = 0
-let t = 0
 
-function render() {
-  raf = requestAnimationFrame(render)
-  t += 0.016
+function render(now: number) {
+  const t = now / 1000
   let s = ''
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
@@ -36,12 +35,11 @@ function onMove(e: PointerEvent) {
   mx = ((e.clientX - r.left) / r.width) * W
   my = ((e.clientY - r.top) / r.height) * H
 }
-onMounted(() => { raf = requestAnimationFrame(render) })
-onBeforeUnmount(() => cancelAnimationFrame(raf))
+useVisibleLoop(root, render)
 </script>
 
 <template>
-  <div class="about">
+  <div ref="root" class="about">
     <figure class="portrait" data-cursor @pointermove="onMove" @pointerleave="mx = -1">
       <pre aria-hidden="true">{{ portrait }}</pre>
       <figcaption class="mono">

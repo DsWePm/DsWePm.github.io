@@ -9,13 +9,13 @@ const enabled = ref(false)
 const st = reactive({ p: 0, thumb: 10, top: 0, dragging: false, hover: false })
 const marks = ref<{ id: string; label: string; at: number }[]>([])
 // ticks come from whatever the current page marks with data-hud-mark="LABEL" (sections, article headings)
-let raf = 0, grab = 0
+let raf = 0, grab = 0, max = 1
 let ro: ResizeObserver | undefined
 
 function maxScroll() { return Math.max(1, document.documentElement.scrollHeight - innerHeight) }
 
 function measure() {
-  const max = maxScroll()
+  max = maxScroll()
   marks.value = [...document.querySelectorAll<HTMLElement>('[data-hud-mark]')].map((el, i) => ({
     id: el.id || String(i), label: el.dataset.hudMark!,
     at: Math.min(1, (el.getBoundingClientRect().top + scrollY) / max),
@@ -24,7 +24,6 @@ function measure() {
 
 function loop() {
   raf = requestAnimationFrame(loop)
-  const max = maxScroll()
   st.p = Math.min(1, Math.max(0, scrollY / max))
   st.thumb = Math.max(4, (innerHeight / (max + innerHeight)) * 100)
   st.top = st.p * (100 - st.thumb)

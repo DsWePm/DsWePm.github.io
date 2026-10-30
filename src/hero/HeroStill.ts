@@ -6,6 +6,8 @@ const BASE = import.meta.env.BASE_URL
 const ASPECT = 16 / 9
 const PARALLAX = 0.016       // image-uv shift of the slab at full mouse deflection
 const PRELOAD = 24           // fall frames loaded before the hero counts as ready
+const AHEAD = 12             // fall frames decoded ahead of the scroll (and half as many behind)
+const KEEP = 20              // decoded frames further than this from the scroll are released
 const damp = (a: number, b: number, l: number, dt: number) => b + (a - b) * Math.exp(-l * dt)
 const smooth = (a: number, b: number, v: number) => { const t = Math.min(1, Math.max(0, (v - a) / (b - a))); return t * t * (3 - 2 * t) }
 
@@ -38,11 +40,17 @@ export class HeroStill {
   private parallax = 1
   // fall sequence
   meta!: FallMeta
-  private frames: (HTMLImageElement | null)[] = []
-  private texA = new THREE.Texture()
-  private texB = new THREE.Texture()
-  private shownA = -1
-  private shownB = -1
+  private frames: (Blob | null)[] = []      // encoded files; decoding all 254 would take ~2 GB
+  // Uploading an <img> makes the browser decode it on the spot (~30 ms for a 1080p webp), so the
+  // frames around the scroll are decoded ahead into ImageBitmaps; from a Blob that runs off the
+  // main thread (from an <img> it doesn't). Frame i lives
+  // in slot i % 2: stepping one frame re-uploads one texture, not both.
+  private bitmaps = new Map<number, ImageBitmap>()
+  private decoding = new Set<number>()
+  private release: ImageBitmap[] = []
+  private releasing = false
+  private slots = [new THREE.Texture(), new THREE.Texture()]
+  private slotFrame = [-1, -1]
   private target = 0          // frame the scroll asks for
   private shown = 0           // frame on screen (damped)
   private impactArmed = true
@@ -55,9 +63,10 @@ export class HeroStill {
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
     this.renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: false, powerPreference: 'high-performance' })
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5))   // full-screen shader: 2x costs ~1.8x the fill for little gain
     this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace    // images are already display-referred
-    for (const t of [this.texA, this.texB]) { t.colorSpace = THREE.NoColorSpace; t.minFilter = THREE.LinearFilter; t.generateMipmaps = false }
+    // bitmaps arrive flipped already (createImageBitmap below); WebGL ignores flipY for them
+    for (const t of this.slots) { t.colorSpace = THREE.NoColorSpace; t.minFilter = THREE.LinearFilter; t.generateMipmaps = false; t.flipY = false }
     const black = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1); black.needsUpdate = true
     this.mat = new THREE.ShaderMaterial({
       vertexShader: quadVert, fragmentShader: heroFrag, depthTest: false,
@@ -83,14 +92,9 @@ export class HeroStill {
   }
 
   private loadFrame(i: number) {
-    return new Promise<void>((res) => {
-      const img = new Image()
-      img.decoding = 'async'
-      // decode() can stall in background tabs; a loaded image is usable, decoding just warms it up
-      img.onload = () => { this.frames[i] = img; img.decode().catch(() => {}); res() }
-      img.onerror = () => res()
-      img.src = this.frameUrl(i)
-    })
+    return fetch(this.frameUrl(i))
+      .then((r) => (r.ok ? r.blob() : null))
+      .then((b) => { this.frames[i] = b }, () => {})
   }
 
   async load(onProgress: (p: number) => void) {
@@ -225,23 +229,54 @@ export class HeroStill {
     loop()
   }
 
-  private nearestLoaded(i: number) {
+  private nearestDecoded(i: number) {
     for (let d = 0; d < this.frames.length; d++) {
-      if (this.frames[i - d]) return i - d
-      if (this.frames[i + d]) return i + d
+      if (this.bitmaps.has(i - d)) return i - d
+      if (this.bitmaps.has(i + d)) return i + d
     }
     return -1
+  }
+
+  /** decode the frames around `c` (more of them in the direction of travel), release the far ones */
+  private warm(c: number, down: boolean) {
+    const n = this.frames.length
+    const lo = Math.max(0, c - (down ? AHEAD >> 1 : AHEAD)), hi = Math.min(n - 1, c + (down ? AHEAD : AHEAD >> 1))
+    for (let i = lo; i <= hi && this.decoding.size < 6; i++) {
+      const blob = this.frames[i]
+      if (!blob || this.bitmaps.has(i) || this.decoding.has(i)) continue
+      this.decoding.add(i)
+      createImageBitmap(blob, { imageOrientation: 'flipY', premultiplyAlpha: 'none', colorSpaceConversion: 'none' })
+        .then((b) => { this.bitmaps.set(i, b) })
+        .catch(() => {})
+        .finally(() => this.decoding.delete(i))
+    }
+    for (const [i, b] of this.bitmaps) {
+      if (Math.abs(i - c) > KEEP && !this.slotFrame.includes(i)) { this.bitmaps.delete(i); this.release.push(b) }
+    }
+    // close() is slow-ish (a few ms each), so released frames are closed between frames
+    if (this.release.length && !this.releasing) {
+      this.releasing = true
+      const idle = window.requestIdleCallback ?? ((f: () => void) => setTimeout(f, 50))
+      idle(() => { this.releasing = false; this.release.splice(0, 4).forEach((b) => b.close()) })
+    }
+  }
+
+  /** the texture holding frame i, uploading it into its slot if it isn't there yet */
+  private bind(i: number) {
+    const k = i & 1, t = this.slots[k]
+    if (this.slotFrame[k] !== i) { t.image = this.bitmaps.get(i)!; t.needsUpdate = true; this.slotFrame[k] = i }
+    return t
   }
 
   private updateFrames(prev: number) {
     const n = this.frames.length
     this.shown = Math.abs(this.target - this.shown) < 0.002 ? this.target : this.shown
     const a = Math.min(n - 1, Math.floor(this.shown)), b = Math.min(n - 1, a + 1)
-    const ia = this.nearestLoaded(a), ib = this.frames[b] ? b : ia
-    if (ia >= 0 && ia !== this.shownA) { this.texA.image = this.frames[ia]!; this.texA.needsUpdate = true; this.shownA = ia }
-    if (ib >= 0 && ib !== this.shownB) { this.texB.image = this.frames[ib]!; this.texB.needsUpdate = true; this.shownB = ib }
+    this.warm(Math.round(this.target), this.target >= this.shown)
+    // not decoded yet (a fast flick): hold the nearest decoded frame rather than stall
+    const ia = this.nearestDecoded(a), ib = ia === a && this.bitmaps.has(b) ? b : ia
     const u = this.mat.uniforms
-    if (ia >= 0) { u.tFrameA.value = this.texA; u.tFrameB.value = this.texB }
+    if (ia >= 0) { u.tFrameA.value = this.bind(ia); u.tFrameB.value = this.bind(ib) }
     // short crossfade between neighbours: mostly one sharp frame, never a double image
     u.uFrameMix.value = ib === b && ia === a ? smooth(0.3, 0.7, this.shown - a) : 0
     // the still hands over to frame 0 within the first fraction of a frame
@@ -297,8 +332,17 @@ export class HeroStill {
     this.renderer.render(this.scene, this.cam)
   }
 
+  /** the rain loop only plays while the stage is on screen */
+  setActive(on: boolean) {
+    if (on === this.active) return
+    this.active = on
+    const v = this.rainVideo
+    if (v) { if (on) v.play().catch(() => {}); else v.pause() }
+  }
+
   dispose() {
     cancelAnimationFrame(this.raf)
+    for (const b of [...this.bitmaps.values(), ...this.release]) b.close()
     this.rainVideo?.pause()
     this.renderer.dispose()
   }

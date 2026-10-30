@@ -75,7 +75,7 @@ function frame() {
   const l = lenis.value, land = r.top + scrollY + track
   if (l && state.value === 'idle' && scrollY < land - 1 && l.targetScroll > land + 3) l.scrollTo(land + 2, { lerp: 0.085 })
   if (scene) {
-    scene.active = state.value === 'idle' && r.bottom > 0
+    scene.setActive(state.value === 'idle' && r.bottom > 0)
     scene.setProgress(scroll.value / 0.97)          // the floor is reached a few px before the archive's top
     hud.depth = scene.depthAt(scene.progressFrame)
   }
@@ -119,7 +119,7 @@ onMounted(async () => {
 onDeactivated(() => {
   cancelAnimationFrame(raf); raf = 0
   setWheel(1)
-  if (scene) scene.active = false
+  scene?.setActive(false)
 })
 onActivated(() => { if (!raf) raf = requestAnimationFrame(frame) })
 
