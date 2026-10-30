@@ -6,64 +6,64 @@ import { art } from '../data/asciiArt'
 import { scramble } from '../composables/scramble'
 import { pathOf, postForDossier } from '../data/posts'
 
-// Files stand side by side in a drawer, each showing only its spine, with the
-// open one in the middle. Scrolling the wheel (or a trackpad) over the drawer
-// rolls the files sideways; at either end the page scrolls on as usual. Up to
-// five are in view; the outer two shrink and fade so the open one holds focus.
+// Files stand side by side in a drawer, each showing only its spine; one is
+// open. Up to five are in view at a time (a window over the row).
+//  - Hover opens the file under the pointer in place; the window does not move,
+//    and the file is resolved from the pointer's x against the *target* layout,
+//    not from DOM hover on moving elements, so it never jitters at a boundary.
+//  - The wheel (or a trackpad) steps the open file along and slides the window
+//    so it sits as near the middle as the row allows; at either end of the row
+//    the page scrolls on as usual.
+// The window's outer two slots shrink and fade unless they hold the open file.
 // Clicking anywhere on a file opens its write-up.
 const BASE = import.meta.env.BASE_URL
 const SPINE = 72
 const VISIBLE = 5
+const STEP = 100                 // wheel delta per file
 const n = dossiers.length
+const slots = Math.min(n, VISIBLE)
+const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v))
 const router = useRouter()
 const drawer = ref<HTMLElement>()
 const width = ref(1100)
-const target = ref(Math.floor((n - 1) / 2))     // start in the middle so both sides are filled
-const pos = ref(target.value)                    // shown position, eased towards target
-const active = computed(() => Math.round(pos.value))
+const active = ref(Math.floor((n - 1) / 2))
+const start = ref(windowFor(active.value))       // first file in view
 const compact = ref(false)
 const tilt = ref(0)
 const plates = ref(dossiers.map((d) => art[d.art] ?? ''))
 const timecode = ref('00:00:00')
 let ro: ResizeObserver | undefined
 let cancel = () => {}
-let tcTimer = 0, raf = 0, snapTimer = 0, last = 0
+let tcTimer = 0, wheelAcc = 0, lastStep = 0
 
-const openW = computed(() => Math.max(360, width.value - (Math.min(n, VISIBLE) - 1) * SPINE))
-const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v))
+const openW = computed(() => Math.max(360, width.value - (slots - 1) * SPINE))
+function windowFor(i: number) { return clamp(i - Math.floor(slots / 2), 0, n - slots) }
 
-/** per file: x, lift, scale, fade; the open width eases between neighbours as pos moves */
-const layout = computed(() => {
-  const p = pos.value
-  const w = dossiers.map((_, i) => SPINE + clamp(1 - Math.abs(i - p), 0, 1) * (openW.value - SPINE))
-  const x: number[] = []
-  w.reduce((acc, wi, i) => ((x[i] = acc), acc + wi), 0)
-  const k = clamp(Math.floor(p), 0, n - 1), f = p - k
-  const mid = (i: number) => x[i] + w[i] / 2
-  const c = k + 1 < n ? mid(k) + (mid(k + 1) - mid(k)) * f : mid(k)
-  const off = width.value / 2 - c
-  return dossiers.map((_, i) => {
-    const d = Math.abs(i - p)
-    const edge = clamp(d - 1, 0, 1.5)              // 0 next to the open file, 1 at the outer slots
-    return {
-      x: x[i] + off, w: w[i],
-      lift: -10 * clamp(1 - d, 0, 1),
-      scale: 1 - 0.07 * edge,
-      fade: clamp(1 - 0.45 * edge - 1.2 * clamp(d - 2, 0, 1), 0, 1),
-    }
-  })
-})
+const xOf = (i: number, a = active.value, s = start.value) => (i - s) * SPINE + (i > a ? openW.value - SPINE : 0)
 
-function ease(t: number) {
-  const dt = Math.min(0.05, (t - last) / 1000 || 0.016)
-  last = t
-  pos.value += (target.value - pos.value) * (1 - Math.exp(-dt * 11))
-  if (Math.abs(target.value - pos.value) < 0.001) { pos.value = target.value; raf = 0; return }
-  raf = requestAnimationFrame(ease)
+/** per file: x, lift, scale, fade */
+const layout = computed(() => dossiers.map((_, i) => {
+  const k = i - start.value                      // slot in the window: 0 .. slots-1 when in view
+  const edge = i === active.value ? 0 : clamp(Math.max(-k, k - (slots - 1)) + 1, 0, 2)   // 1 at the outer slots
+  return {
+    x: xOf(i), w: i === active.value ? openW.value : SPINE,
+    lift: i === active.value ? -10 : 0,
+    scale: 1 - 0.07 * Math.min(edge, 1),
+    fade: clamp(1 - 0.45 * Math.min(edge, 1) - 0.55 * clamp(edge - 1, 0, 1), 0, 1),
+  }
+}))
+
+function indexAt(px: number) {
+  const a = active.value
+  if (px >= xOf(a) && px < xOf(a) + openW.value) return a
+  for (let i = start.value; i < start.value + slots; i++) if (px >= xOf(i) && px < xOf(i) + SPINE) return i
+  return a
 }
-function goTo(t: number) {
-  target.value = clamp(t, 0, n - 1)
-  if (!raf) { last = performance.now(); raf = requestAnimationFrame(ease) }
+function select(i: number) { if (i !== active.value) active.value = clamp(i, 0, n - 1) }
+/** wheel and keys: step the open file and re-centre the window on it */
+function step(i: number) {
+  select(i)
+  start.value = windowFor(active.value)
 }
 
 watch(active, (i) => {
@@ -75,28 +75,30 @@ function onWheel(e: WheelEvent) {
   if (compact.value) return
   const unit = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 800 : 1
   const delta = (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) * unit
-  const next = target.value + delta / 110
   // at either end the wheel goes back to scrolling the page
-  if ((next < 0 && target.value <= 0) || (next > n - 1 && target.value >= n - 1)) return
+  if ((delta < 0 && active.value <= 0) || (delta > 0 && active.value >= n - 1)) { wheelAcc = 0; return }
   e.preventDefault(); e.stopPropagation()
-  goTo(next)
-  clearTimeout(snapTimer)
-  snapTimer = window.setTimeout(() => goTo(Math.round(target.value)), 140)
+  wheelAcc += delta
+  const now = performance.now()
+  if (Math.abs(wheelAcc) < STEP || now - lastStep < 110) return
+  step(active.value + Math.sign(wheelAcc))
+  wheelAcc = 0; lastStep = now
 }
 function onMove(e: PointerEvent) {
   if (compact.value) return
   const r = drawer.value!.getBoundingClientRect()
   tilt.value = ((e.clientY - r.top) / r.height - 0.5) * -3
+  if (e.pointerType === 'mouse') select(indexAt(e.clientX - r.left))
 }
-/** a file with a write-up opens it; one without rolls to the middle */
+/** a file with a write-up opens it; one without becomes the open file */
 function open(i: number) {
   const p = postForDossier(dossiers[i].code)
   if (p) router.push(pathOf(p))
-  else goTo(i)
+  else step(i)
 }
 function onKey(e: KeyboardEvent) {
-  if (e.key === 'ArrowRight') { goTo(Math.round(target.value) + 1); e.preventDefault() }
-  if (e.key === 'ArrowLeft') { goTo(Math.round(target.value) - 1); e.preventDefault() }
+  if (e.key === 'ArrowRight') { step(active.value + 1); e.preventDefault() }
+  if (e.key === 'ArrowLeft') { step(active.value - 1); e.preventDefault() }
   if (e.key === 'Enter') open(active.value)
 }
 
@@ -127,7 +129,7 @@ onMounted(() => {
   }, 250)
 })
 onBeforeUnmount(() => {
-  ro?.disconnect(); cancel(); clearInterval(tcTimer); clearTimeout(snapTimer); cancelAnimationFrame(raf)
+  ro?.disconnect(); cancel(); clearInterval(tcTimer)
   drawer.value?.removeEventListener('wheel', onWheel)
 })
 
@@ -139,7 +141,7 @@ const bar = (v: number) => '█'.repeat(Math.round(v * 12)) + '░'.repeat(12 - 
   <div class="dossiers">
     <div
       ref="drawer" class="drawer" :class="{ compact }" tabindex="0" data-cursor="slide"
-      aria-label="Skill files. Scroll or use the arrow keys to browse, Enter to open."
+      aria-label="Skill files. Hover, scroll or use the arrow keys to browse, Enter to open."
       @pointermove="onMove" @keydown="onKey"
     >
       <div class="rail" :style="{ transform: `rotateX(${tilt}deg)` }">
@@ -191,7 +193,7 @@ const bar = (v: number) => '█'.repeat(Math.round(v * 12)) + '░'.repeat(12 - 
         </article>
       </div>
     </div>
-    <p class="hint mono" aria-hidden="true">◀ ▶ scroll over the drawer to roll the files · click a file to open it · {{ String(active + 1).padStart(2, '0') }} / {{ String(n).padStart(2, '0') }}</p>
+    <p class="hint mono" aria-hidden="true">◀ ▶ hover or scroll over the drawer to browse the files · click a file to open it · {{ String(active + 1).padStart(2, '0') }} / {{ String(n).padStart(2, '0') }}</p>
   </div>
 </template>
 
@@ -204,7 +206,7 @@ const bar = (v: number) => '█'.repeat(Math.round(v * 12)) + '░'.repeat(12 - 
   background: linear-gradient(90deg, #f1f3f3, #e9eced 60%, #e4e8e9);
   border: 1px solid var(--line);
   box-shadow: -14px 0 28px rgba(30, 40, 46, 0.10);
-  transition: box-shadow 0.4s; cursor: pointer;
+  transition: transform 0.75s var(--ease-out), opacity 0.5s, box-shadow 0.4s; cursor: pointer;
   will-change: transform, opacity;
 }
 .file.open { box-shadow: -20px 6px 40px rgba(30, 40, 46, 0.16); }
