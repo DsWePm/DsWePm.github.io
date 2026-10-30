@@ -139,7 +139,7 @@ onBeforeUnmount(() => { cancelAnimationFrame(raf); cancelPlate(); document.title
         </dl>
         <p v-if="post.repo || post.demo" class="links mono">
           <a v-if="post.repo" :href="post.repo" target="_blank" rel="noopener">[ SOURCE ── {{ host(post.repo) }} ↗ ]</a>
-          <a v-if="post.demo" :href="post.demo" target="_blank" rel="noopener">[ LIVE ── {{ host(post.demo) }} ↗ ]</a>
+          <a v-if="post.demo" :href="post.demo" target="_blank" rel="noopener">[ VIEW ── {{ host(post.demo) }} ↗ ]</a>
         </p>
       </div>
       <pre class="dither" aria-hidden="true">{{ dither }}</pre>

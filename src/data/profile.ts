@@ -22,9 +22,11 @@ export const profile = {
   location: 'Melbourne, AU',
   tagline: 'Signals from the bottom of the city.',
   email: '',                                // shown in CHANNEL when set
+  // `icon` is a key in src/data/brandIcons.ts
   links: [
-    { label: 'GitHub', href: 'https://github.com/DsWePm' },
-  ],
+    { label: 'GitHub', href: 'https://github.com/DsWePm', icon: 'github' },
+    { label: 'Bilibili', href: 'https://space.bilibili.com/31988330', icon: 'bilibili' },
+  ] as { label: string; href: string; icon?: string }[],
   about: [
     '墨尔本大学信息技术硕士在读，方向是人工智能；本科在中国地质大学（北京）读地球信息科学与技术（大数据与数字地球）。',
     '关心的是模型怎么从零搭起来、怎么在仿真里学会控制：从手写一个 GPT-2，到用 PID、SAC 和模仿学习训练一辆会循迹避障的小车。业余时间也写渲染器、做程序化建模。',
@@ -80,5 +82,6 @@ export const timeline: TimelineEntry[] = [
   { when: '2026', title: 'Homepage / 雨城裂缝', where: 'Personal project', detail: 'Blender 程序化城市、Cycles 预渲染的自由落体，Vue 3 + three.js 接回网页。', kind: 'project' },
   { when: '2026', title: 'Fluorite', where: 'Open source', detail: 'Minecraft 26.2 Vulkan 后端的光线追踪渲染器。', kind: 'project' },
   { when: '2020.09 – 2024.07', title: 'B.Sc. Geographic Information Science', where: 'China University of Geosciences (Beijing)', detail: '地球信息科学与技术（大数据与数字地球）。', kind: 'edu' },
+  { when: '2023.10', title: '【东方未来】囹圄', where: 'Bilibili', detail: '3D 渲染练习短片，77 秒。', kind: 'project' },
   { when: '2021', title: '专业三等奖学金', where: 'China University of Geosciences (Beijing)', detail: '2021 年度专业三等奖学金。', kind: 'award' },
 ]

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { profile } from '../data/profile'
+import { brandIcons } from '../data/brandIcons'
 import ScrambleText from './ScrambleText.vue'
 
 const BARS = '▁▂▃▄▅▆▇'
@@ -36,7 +37,10 @@ onBeforeUnmount(() => cancelAnimationFrame(raf))
       </button>
       <ul class="links mono">
         <li v-for="l in profile.links" :key="l.label">
-          <a :href="l.href" target="_blank" rel="noopener" v-magnetic="0.3">{{ l.label }} ↗</a>
+          <a :href="l.href" target="_blank" rel="noopener" v-magnetic="0.3" :style="l.icon ? { '--brand': brandIcons[l.icon]?.hex } : {}">
+            <svg v-if="l.icon && brandIcons[l.icon]" class="ico" viewBox="0 0 24 24" aria-hidden="true"><path :d="brandIcons[l.icon].path" /></svg>
+            <span>{{ l.label }}</span><i aria-hidden="true">↗</i>
+          </a>
         </li>
       </ul>
     </div>
@@ -52,6 +56,10 @@ onBeforeUnmount(() => cancelAnimationFrame(raf))
 .email:hover { border-color: var(--accent-dim); background: var(--asphalt); }
 .email em { font-style: normal; font-size: 11px; color: var(--fog-dim); letter-spacing: 0.14em; }
 .links { display: flex; gap: 28px; list-style: none; padding: 0; margin: 0; font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; }
-.links a { display: inline-block; color: var(--fog); padding: 8px 0; }
+.links a { display: inline-flex; align-items: center; gap: 10px; color: var(--fog); padding: 8px 0; transition: color 0.3s; }
+.links a i { font-style: normal; opacity: 0.6; }
 .links a:hover { color: var(--mist); }
+/* brand marks stay in the site's grey ink and take their own colour on hover */
+.ico { width: 18px; height: 18px; fill: currentColor; transition: fill 0.3s, transform 0.4s var(--ease-out); }
+.links a:hover .ico { fill: var(--brand, currentColor); transform: translateY(-1px); }
 </style>

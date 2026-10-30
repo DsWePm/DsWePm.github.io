@@ -41,7 +41,7 @@ md.renderer.rules.fence = (tokens, i) => {
 // a YouTube / Bilibili / Vimeo page link becomes an embedded player
 const EMBEDS: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/youtu(?:\.be\/|be\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{11})/, (m) => `https://www.youtube-nocookie.com/embed/${m[1]}`],
-  [/bilibili\.com\/video\/(BV\w+)/, (m) => `https://player.bilibili.com/player.html?bvid=${m[1]}&autoplay=0&high_quality=1`],
+  [/bilibili\.com\/video\/(BV\w+)/, (m) => `https://player.bilibili.com/player.html?isOutside=true&bvid=${m[1]}&p=1&autoplay=0&high_quality=1`],
   [/vimeo\.com\/(\d+)/, (m) => `https://player.vimeo.com/video/${m[1]}`],
 ]
 
