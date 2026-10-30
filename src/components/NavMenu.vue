@@ -61,4 +61,11 @@ button { display: flex; align-items: baseline; gap: 8px; width: 100%; padding: 7
 .dots { flex: 1; border-bottom: 1px dotted #bec5c8; transform: translateY(-3px); }
 .gc { color: #7b858a; }
 .grp:hover .gc { color: #4d6a70; }
+/* night mode */
+:root[data-theme='dark'] .sheet { background: rgba(20, 25, 28, 0.96); border-color: #2b343a; color: #a3acb1; box-shadow: 0 22px 48px -24px rgba(0, 0, 0, 0.8); }
+:root[data-theme='dark'] .sh { color: #4e676c; }
+:root[data-theme='dark'] .grp:hover { color: #d9dee0; background: rgba(134, 166, 172, 0.1); }
+:root[data-theme='dark'] .dots { border-bottom-color: #2b343a; }
+:root[data-theme='dark'] .gc { color: #6c767c; }
+:root[data-theme='dark'] .grp:hover .gc { color: #86a6ac; }
 </style>

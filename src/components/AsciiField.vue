@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { theme } from '../composables/prefs'
 
 // Sparse character rain behind the content. Glyphs near the pointer brighten
 // and are pushed aside; frozen when reduced motion is requested.
@@ -10,6 +11,14 @@ let raf = 0
 let cols: { y: number; speed: number; len: number }[] = []
 let mouse = { x: -999, y: -999 }
 let last = 0
+// glyph colours (r, g, b) from the archive's theme, re-read when night mode toggles
+let ink = { base: '80,90,95', hot: '77,106,112' }
+function readInk() {
+  const c = canvas.value
+  if (!c) return
+  const cs = getComputedStyle(c)
+  ink = { base: cs.getPropertyValue('--glyph').trim() || ink.base, hot: cs.getPropertyValue('--glyph-hot').trim() || ink.hot }
+}
 
 function resize() {
   const c = canvas.value!
@@ -41,7 +50,7 @@ function draw(t: number) {
       const near = Math.max(0, 1 - d / 120)
       x += (dx / (d || 1)) * near * 18
       const a = (1 - k / col.len) * 0.13 + near * 0.35
-      ctx.fillStyle = near > 0.05 ? `rgba(77,106,112,${a})` : `rgba(80,90,95,${a * 0.8})`
+      ctx.fillStyle = near > 0.05 ? `rgba(${ink.hot},${a})` : `rgba(${ink.base},${a * 0.8})`
       // head flickers, the tail keeps stable glyphs
       const ch = k === 0 ? CHARS[(Math.random() * CHARS.length) | 0] : CHARS[(i * 7 + (y / CELL) * 13) % CHARS.length | 0]
       ctx.fillText(ch, x, y)
@@ -51,7 +60,10 @@ function draw(t: number) {
 
 const onMove = (e: PointerEvent) => { mouse = { x: e.clientX, y: e.clientY } }
 
+watch(theme, () => nextTick(readInk))
+
 onMounted(() => {
+  readInk()
   resize()
   window.addEventListener('resize', resize)
   window.addEventListener('pointermove', onMove, { passive: true })

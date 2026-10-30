@@ -11,6 +11,7 @@ import AboutPanel from '../components/AboutPanel.vue'
 import TimelineList from '../components/TimelineList.vue'
 import ContactPanel from '../components/ContactPanel.vue'
 import SiteFooter from '../components/SiteFooter.vue'
+import { theme, tr } from '../composables/prefs'
 
 defineOptions({ name: 'HomeView' })
 const progress = ref(0)
@@ -20,18 +21,18 @@ const ready = ref(false)
 <template>
   <LoadingScreen :progress="progress" :done="ready" />
   <HeroCanyon @progress="progress = $event" @ready="ready = true" />
-  <main class="content theme-light" data-page="home">
+  <main class="content theme-light" data-page="home" :data-nav-dark="theme === 'dark' ? '' : undefined">
     <AsciiField />
     <!-- the landing holds: the archive stays centred on screen for half a screen of scrolling -->
     <div class="dwell">
-      <div class="pin"><SectionFrame id="archive" index="01" title="ARCHIVE" subtitle="技能档案"><DossierStack /></SectionFrame></div>
+      <div class="pin"><SectionFrame id="archive" index="01" title="ARCHIVE" :subtitle="tr({ zh: '技能档案', en: 'Skill files' })"><DossierStack /></SectionFrame></div>
       <div class="slack" aria-hidden="true" />
     </div>
-    <SectionFrame id="log" index="02" title="LOG" subtitle="文章 / 笔记"><PostIndex /></SectionFrame>
-    <SectionFrame id="projects" index="03" title="PROJECTS" subtitle="项目"><ProjectGrid /></SectionFrame>
-    <SectionFrame id="about" index="04" title="SUBJECT" subtitle="关于我 / 研究方向"><AboutPanel /></SectionFrame>
-    <SectionFrame id="timeline" index="05" title="TIMELINE" subtitle="论文 / 经历"><TimelineList /></SectionFrame>
-    <SectionFrame id="contact" index="06" title="CHANNEL" subtitle="联系方式"><ContactPanel /></SectionFrame>
+    <SectionFrame id="log" index="02" title="LOG" :subtitle="tr({ zh: '文章 / 笔记', en: 'Articles / Notes' })"><PostIndex /></SectionFrame>
+    <SectionFrame id="projects" index="03" title="PROJECTS" :subtitle="tr({ zh: '项目', en: 'Work' })"><ProjectGrid /></SectionFrame>
+    <SectionFrame id="about" index="04" title="SUBJECT" :subtitle="tr({ zh: '关于我 / 研究方向', en: 'About / Research' })"><AboutPanel /></SectionFrame>
+    <SectionFrame id="timeline" index="05" title="TIMELINE" :subtitle="tr({ zh: '论文 / 经历', en: 'Papers / Experience' })"><TimelineList /></SectionFrame>
+    <SectionFrame id="contact" index="06" title="CHANNEL" :subtitle="tr({ zh: '联系方式', en: 'Contact' })"><ContactPanel /></SectionFrame>
     <SiteFooter />
   </main>
 </template>

@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { categoriesIn, entries, type Collection } from '../data/posts'
 import { filters } from '../composables/filters'
+import { tr } from '../composables/prefs'
 
 // ┌ ALL 03 │ AI 01 │ CG 02 ┐ — picks the category shown by an index below it
 const props = defineProps<{ collection: Collection }>()
@@ -17,7 +18,7 @@ const pad = (n: number) => String(n).padStart(2, '0')
     </button>
     <template v-for="g in groups" :key="g.category.id">
       <span class="sep" aria-hidden="true">│</span>
-      <button role="tab" :aria-selected="filters[collection] === g.category.id" :class="{ on: filters[collection] === g.category.id }" :title="g.category.name"
+      <button role="tab" :aria-selected="filters[collection] === g.category.id" :class="{ on: filters[collection] === g.category.id }" :title="tr(g.category.name)"
               @click="filters[collection] = g.category.id">
         {{ g.category.label }} <i>{{ pad(g.items.length) }}</i>
       </button>

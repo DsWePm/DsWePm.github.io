@@ -37,5 +37,51 @@
   --ground: #161b1e;
   --accent: #4d6a70;
   --accent-dim: #91a4a8;
+  --paper: #e3e6e7;
+  /* surfaces and inks used by the archive's components */
+  --card: rgba(255, 255, 255, 0.28);          /* project cards, the portrait panel */
+  --sheet: linear-gradient(90deg, #f1f3f3, #e9eced 60%, #e4e8e9);   /* skill files */
+  --spine: rgba(205, 211, 213, 0.45);
+  --shade: rgba(30, 40, 46, 0.10);
+  --shade-open: rgba(30, 40, 46, 0.16);
+  --media: #cfd5d7;
+  --hud-ink: rgba(42, 50, 54, 0.75);
+  --prose: #3a4347;
+  --figure: #dde1e2;
+  --quote: rgba(77, 106, 112, 0.07);
+  --code-inline: rgba(46, 54, 61, 0.08);
+  --glyph: 80, 90, 95;                       /* AsciiField rain, as r, g, b */
+  --glyph-hot: 77, 106, 112;
   color: var(--mist);
 }
+
+/* Night mode: only the pages after the landing (the archive, posts) change;
+   the hero keeps its own palette. Same low-saturation city at night. */
+:root[data-theme='dark'] .theme-light {
+  --graphite: #101417;
+  --asphalt: #171c20;
+  --asphalt-2: #1e2429;
+  --line: #2b343a;
+  --fog: #a3acb1;
+  --fog-dim: #6c767c;
+  --mist: #d9dee0;
+  --ground: #e3e6e7;
+  --accent: #86a6ac;
+  --accent-dim: #4e676c;
+  --paper: #101417;
+  --card: rgba(255, 255, 255, 0.025);
+  --sheet: linear-gradient(90deg, #1c2226, #191e22 60%, #161b1e);
+  --spine: rgba(44, 52, 58, 0.6);
+  --shade: rgba(0, 0, 0, 0.35);
+  --shade-open: rgba(0, 0, 0, 0.5);
+  --media: #0b0e10;
+  --hud-ink: rgba(210, 216, 218, 0.75);
+  --prose: #b7bfc3;
+  --figure: #161b1f;
+  --quote: rgba(134, 166, 172, 0.08);
+  --code-inline: rgba(255, 255, 255, 0.05);
+  --glyph: 150, 160, 166;
+  --glyph-hot: 134, 166, 172;
+}
+/* gaps between pages (the landing's slack, overscroll) take the night colour too */
+:root[data-theme='dark'], :root[data-theme='dark'] body { background: #101417; }

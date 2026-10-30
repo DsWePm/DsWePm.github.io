@@ -16,9 +16,15 @@
 //   repo:     https://github.com/you/name   (its name also pulls stars from repos.json)
 //   demo:     https://...
 //   cover:    images/cover.jpg       (under public/, shown on the card)
+//
+// English: put the translation beside it as <slug>.en.md (same front matter,
+// translated title / summary / tags / body). Without one, the Chinese file is
+// shown in English mode too, and the other way round.
 
+import { reactive, watch } from 'vue'
 import repos from './repos.json'
 import { categories, categoryOf, type Category } from './categories'
+import { lang, type Lang } from '../composables/prefs'
 
 export type Collection = 'log' | 'projects'
 
@@ -50,7 +56,7 @@ const files: Record<Collection, Record<string, string>> = {
 }
 
 function parse(collection: Collection, path: string, raw: string): Omit<Entry, 'code'> {
-  const slug = path.split('/').pop()!.replace(/\.md$/, '')
+  const slug = path.split('/').pop()!.replace(/(\.en)?\.md$/, '')
   const m = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/)
   const meta: Record<string, string> = {}
   for (const line of (m?.[1] ?? '').split(/\r?\n/)) {
@@ -83,15 +89,30 @@ function parse(collection: Collection, path: string, raw: string): Omit<Entry, '
   }
 }
 
-function load(collection: Collection, prefix: string): Entry[] {
-  return Object.entries(files[collection]).map(([p, raw]) => parse(collection, p, raw))
+/** one Entry per slug, in the given language where a translation exists */
+function load(collection: Collection, prefix: string, l: Lang): Entry[] {
+  const bySlug = new Map<string, { zh?: Omit<Entry, 'code'>; en?: Omit<Entry, 'code'> }>()
+  for (const [p, raw] of Object.entries(files[collection])) {
+    const e = parse(collection, p, raw)
+    const v = bySlug.get(e.slug) ?? {}
+    v[/\.en\.md$/.test(p) ? 'en' : 'zh'] = e
+    bySlug.set(e.slug, v)
+  }
+  return [...bySlug.values()].map((v) => (v[l] ?? v.zh ?? v.en)!)
     .filter((e) => import.meta.env.DEV || !e.draft)
     .sort((a, b) => a.date.localeCompare(b.date))
     .map((e, i) => ({ ...e, code: `${prefix}-${String(i + 1).padStart(3, '0')}` }))
     .reverse()                                     // oldest gets 001; listed newest first
 }
 
-export const entries: Record<Collection, Entry[]> = { log: load('log', 'LOG'), projects: load('projects', 'PRJ') }
+// reactive and refilled in place when the language changes, so every list re-renders
+export const entries = reactive<Record<Collection, Entry[]>>({ log: [], projects: [] })
+function fill(l: Lang) {
+  entries.log.splice(0, entries.log.length, ...load('log', 'LOG', l))
+  entries.projects.splice(0, entries.projects.length, ...load('projects', 'PRJ', l))
+}
+fill(lang.value)
+watch(lang, fill)
 export const posts = entries.log
 
 export const entryBy = (c: Collection, slug: string) => entries[c].find((e) => e.slug === slug)

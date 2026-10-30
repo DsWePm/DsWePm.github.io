@@ -44,7 +44,7 @@ const src = (p: string) => (/^(https?:|\/)/.test(p) ? p : BASE + p)
 .repos { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
 .repo {
   position: relative; display: flex; flex-direction: column; gap: 10px; padding: 24px 24px 20px; min-height: 240px;
-  background: rgba(255, 255, 255, 0.28); overflow: hidden;
+  background: var(--card); overflow: hidden;
   border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
   transition: background 0.35s;
 }

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { profile } from '../data/profile'
+import { tr } from '../composables/prefs'
 
 // "Subject portrait": an ASCII noise field that sharpens around the pointer.
 const W = 34, H = 18
@@ -50,10 +51,10 @@ onBeforeUnmount(() => cancelAnimationFrame(raf))
       </figcaption>
     </figure>
     <div class="text">
-      <p v-for="(p, i) in profile.about" :key="i" :class="{ lead: i === 0 }">{{ p }}</p>
+      <p v-for="(p, i) in tr(profile.about)" :key="i" :class="{ lead: i === 0 }">{{ p }}</p>
       <h3 class="label">research directions</h3>
       <ul class="research">
-        <li v-for="(r, i) in profile.research" :key="r"><span class="mono">R-{{ String(i + 1).padStart(2, '0') }}</span>{{ r }}</li>
+        <li v-for="(r, i) in tr(profile.research)" :key="r"><span class="mono">R-{{ String(i + 1).padStart(2, '0') }}</span>{{ r }}</li>
       </ul>
     </div>
   </div>
@@ -61,7 +62,7 @@ onBeforeUnmount(() => cancelAnimationFrame(raf))
 
 <style scoped>
 .about { display: grid; grid-template-columns: minmax(0, 420px) minmax(0, 1fr); gap: clamp(32px, 6vw, 96px); align-items: start; }
-.portrait { margin: 0; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.3); }
+.portrait { margin: 0; border: 1px solid var(--line); background: var(--card); }
 .portrait pre { margin: 0; padding: 20px; font: 12px/1.05 var(--font-mono); color: var(--fog); text-align: center; letter-spacing: 1px; }
 figcaption { border-top: 1px dashed var(--line); padding: 14px 20px; font-size: 11px; letter-spacing: 0.14em; }
 dl { margin: 0; display: grid; grid-template-columns: 90px 1fr; row-gap: 6px; }

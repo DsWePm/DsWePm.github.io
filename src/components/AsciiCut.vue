@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref } from 'vue'
 import { asciiCut } from '../composables/useAsciiCut'
+import { theme } from '../composables/prefs'
 
 // The landing cut: a full black screen pours away in columns of characters.
 // Each column's head is a bright glyph on black; behind it the archive is
@@ -33,6 +34,8 @@ function play() {
     drift = Math.min(1, Math.max(0, drift + (Math.random() - 0.5) * 0.35))
     return { delay: drift * 0.32 + Math.random() * 0.06, dur: 0.55 + Math.random() * 0.2, len: 6 + ((Math.random() * 10) | 0), seed: Math.random() * 1000 }
   })
+  // the trail settles into the page underneath: dark ink on the day archive, light at night
+  const trail = theme.value === 'dark' ? '190,198,201' : '42,50,54'
   const t0 = performance.now()
   const frame = (now: number) => {
     const t = (now - t0) / 1000
@@ -58,7 +61,7 @@ function play() {
         const y = hy - j
         if (y < 0 || y >= rows) continue
         const f = 1 - j / (col.len + 1)
-        ctx.fillStyle = `rgba(42,50,54,${(0.55 * f).toFixed(3)})`
+        ctx.fillStyle = `rgba(${trail},${(0.55 * f).toFixed(3)})`
         ctx.fillText(glyphs[Math.max(1, Math.round(f * (glyphs.length - 1)))], x + 1, y * CELL)
       }
     })

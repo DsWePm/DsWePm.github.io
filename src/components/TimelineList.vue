@@ -2,6 +2,7 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { years } from '../data/timeline'
 import ScrambleText from './ScrambleText.vue'
+import { tr } from '../composables/prefs'
 
 // Entries grouped under a year rule; each lights up as it scrolls into view.
 const root = ref<HTMLElement>()
@@ -32,9 +33,9 @@ onBeforeUnmount(() => io?.disconnect())
           <div class="node mono" aria-hidden="true">{{ seen[`${y.id}-${i}`] ? '◆' : '◇' }}</div>
           <div class="what">
             <span class="kind mono">[{{ t.kind.toUpperCase() }}]</span>
-            <ScrambleText :text="t.title" as="h3" />
-            <p class="where mono">{{ t.where }}</p>
-            <p class="detail">{{ t.detail }}</p>
+            <ScrambleText :text="tr(t.title)" as="h3" />
+            <p class="where mono">{{ tr(t.where) }}</p>
+            <p class="detail">{{ tr(t.detail) }}</p>
           </div>
         </li>
       </ol>

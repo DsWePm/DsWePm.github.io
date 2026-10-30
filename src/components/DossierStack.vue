@@ -5,6 +5,7 @@ import { dossiers } from '../data/profile'
 import { art } from '../data/asciiArt'
 import { scramble } from '../composables/scramble'
 import { pathOf, postForDossier } from '../data/posts'
+import { tr } from '../composables/prefs'
 
 // Files stand side by side in a drawer, each showing only its spine; one is
 // open. Up to five are in view at a time (a window over the row).
@@ -157,7 +158,7 @@ const bar = (v: number) => '█'.repeat(Math.round(v * 12)) + '░'.repeat(12 - 
         >
           <header class="spine mono">
             <span class="no">{{ String(i + 1).padStart(2, '0') }}</span>
-            <span class="vtitle">{{ d.code }} ── {{ d.title }}</span>
+            <span class="vtitle">{{ d.code }} ── {{ tr(d.title) }}</span>
             <span class="clr">L{{ d.clearance.slice(1) }}</span>
             <span class="barcode" aria-hidden="true" />
           </header>
@@ -175,8 +176,8 @@ const bar = (v: number) => '█'.repeat(Math.round(v * 12)) + '░'.repeat(12 - 
             </figure>
             <div class="info">
               <p class="label">{{ d.code }} · clearance {{ d.clearance }}</p>
-              <h3>{{ d.title }}</h3>
-              <p class="summary">{{ d.summary }}</p>
+              <h3>{{ tr(d.title) }}</h3>
+              <p class="summary">{{ tr(d.summary) }}</p>
               <ul class="skills mono">
                 <li v-for="s in d.skills" :key="s.name">
                   <span class="name">{{ s.name }}</span>
@@ -203,17 +204,17 @@ const bar = (v: number) => '█'.repeat(Math.round(v * 12)) + '░'.repeat(12 - 
 
 .file {
   position: absolute; top: 10px; left: 0; height: 440px; display: flex;
-  background: linear-gradient(90deg, #f1f3f3, #e9eced 60%, #e4e8e9);
+  background: var(--sheet);
   border: 1px solid var(--line);
-  box-shadow: -14px 0 28px rgba(30, 40, 46, 0.10);
+  box-shadow: -14px 0 28px var(--shade);
   transition: transform 0.75s var(--ease-out), opacity 0.5s, box-shadow 0.4s; cursor: pointer;
   will-change: transform, opacity;
 }
-.file.open { box-shadow: -20px 6px 40px rgba(30, 40, 46, 0.16); }
+.file.open { box-shadow: -20px 6px 40px var(--shade-open); }
 
 .spine {
   flex: 0 0 72px; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 16px 0;
-  border-right: 1px dashed var(--line); background: rgba(205, 211, 213, 0.45);
+  border-right: 1px dashed var(--line); background: var(--spine);
   font-size: 10px; letter-spacing: 0.2em; color: var(--fog);
   transition: background 0.4s, color 0.4s;
 }
@@ -225,11 +226,11 @@ const bar = (v: number) => '█'.repeat(Math.round(v * 12)) + '░'.repeat(12 - 
 .body { flex: 1; min-width: 0; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 28px; padding: 28px 30px; opacity: 0; transform: translateX(-12px); transition: opacity 0.4s, transform 0.6s var(--ease-out); }
 .file.open .body { opacity: 1; transform: none; transition-delay: 0.12s; }
 
-.media { position: relative; margin: 0; aspect-ratio: 16 / 10; align-self: start; background: #cfd5d7; border: 1px solid var(--line); overflow: hidden; }
+.media { position: relative; margin: 0; aspect-ratio: 16 / 10; align-self: start; background: var(--media); border: 1px solid var(--line); overflow: hidden; }
 .media video { width: 100%; height: 100%; object-fit: cover; display: block; filter: saturate(0.55) contrast(0.95) brightness(1.03); }
 .media::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.06) 0 1px, transparent 1px 3px); }
 .plate { margin: 0; height: 100%; display: flex; align-items: center; justify-content: center; font: 10px/1.2 var(--font-mono); color: var(--fog); }
-.hud span { position: absolute; font-size: 10px; letter-spacing: 0.14em; color: rgba(42, 50, 54, 0.75); }
+.hud span { position: absolute; font-size: 10px; letter-spacing: 0.14em; color: var(--hud-ink); }
 .hud .tl { left: 10px; top: 8px; } .hud .tr { right: 10px; top: 8px; }
 .hud .bl { left: 10px; bottom: 8px; } .hud .br { right: 10px; bottom: 8px; }
 .media video ~ .hud span { color: rgba(236, 239, 240, 0.85); }

@@ -6,6 +6,7 @@ import { lenis } from '../composables/useLenis'
 import { asciiCut } from '../composables/useAsciiCut'
 import { startTilt } from '../composables/useTilt'
 import type { HeroStill } from '../hero/HeroStill'
+import { tr } from '../composables/prefs'
 
 // Hero: an interactive Cycles still on top of a short scroll track. Scrolling
 // scrubs the pre-rendered free fall frame by frame (and back up). The track
@@ -142,7 +143,7 @@ onBeforeUnmount(() => {
       <div class="title" :style="{ opacity: chrome }">
         <p class="label">░ subject file // 0x7A1 · {{ profile.location }}</p>
         <h1><ScrambleText :text="profile.name.toUpperCase()" trigger="mount" :delay="900" :duration="1400" /></h1>
-        <p class="role">{{ profile.role }} — <span>{{ profile.tagline }}</span></p>
+        <p class="role">{{ tr(profile.role) }} — <span>{{ tr(profile.tagline) }}</span></p>
       </div>
 
       <div class="gauge mono" aria-hidden="true">

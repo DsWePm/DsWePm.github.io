@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { entries, entryBy, pathOf, type Collection } from '../data/posts'
 import { filters } from '../composables/filters'
@@ -9,6 +9,7 @@ import { render } from '../content/render'
 import { scramble } from '../composables/scramble'
 import { toSection } from '../composables/navigate'
 import { lenis } from '../composables/useLenis'
+import { theme, tr } from '../composables/prefs'
 import ScrambleText from '../components/ScrambleText.vue'
 import AsciiField from '../components/AsciiField.vue'
 import SiteFooter from '../components/SiteFooter.vue'
@@ -101,13 +102,18 @@ function onArticleClick(e: MouseEvent) {
   }).catch(() => {})
 }
 
-onMounted(async () => {
+/** the tab title, and the article's headings as ticks on the HUD scrollbar (again after a language switch) */
+async function label() {
   if (post.value) document.title = `${post.value.title} — ${post.value.code}`
+  await nextTick()
+  article.value?.querySelectorAll('h2').forEach((h, n) => { h.dataset.hudMark = `${pad(n + 1)} ${h.textContent ?? ''}`.slice(0, 22).toUpperCase() })
+}
+watch(doc, label)
+
+onMounted(async () => {
   const src = art[dossier.value?.art ?? 'tower'] ?? ''
   cancelPlate = scramble(src, (s) => (plate.value = s), 1600)
-  await nextTick()
-  // article headings feed the HUD scrollbar's ticks
-  article.value?.querySelectorAll('h2').forEach((h, n) => { h.dataset.hudMark = `${pad(n + 1)} ${h.textContent ?? ''}`.slice(0, 22).toUpperCase() })
+  await label()
   raf = requestAnimationFrame(track)
 })
 onBeforeUnmount(() => { cancelAnimationFrame(raf); cancelPlate(); document.title = `${profile.name} — Archive` })
@@ -115,7 +121,7 @@ onBeforeUnmount(() => { cancelAnimationFrame(raf); cancelPlate(); document.title
 
 <template>
   <div v-if="post" class="post" :data-page="collection">
-    <header class="head" data-nav-dark>
+    <header class="head" data-nav-dark data-nav-head>
       <div class="scan" aria-hidden="true" />
       <pre class="plate" aria-hidden="true">{{ plate }}</pre>
       <div class="inner">
@@ -125,7 +131,7 @@ onBeforeUnmount(() => { cancelAnimationFrame(raf); cancelPlate(); document.title
           <span class="rule" aria-hidden="true" />
           <span class="rec">● OPEN</span>
         </p>
-        <p class="label kind">{{ kind }} · {{ post.category.name }} · {{ post.code }}<template v-if="dossier"> · source {{ dossier.code }}</template></p>
+        <p class="label kind">{{ kind }} · {{ tr(post.category.name) }} · {{ post.code }}<template v-if="dossier"> · source {{ dossier.code }}</template></p>
         <ScrambleText :text="post.title" as="h1" trigger="mount" :duration="1400" :delay="250" class="title" />
         <p class="summary">{{ post.summary }}</p>
         <dl class="meta mono">
@@ -133,7 +139,7 @@ onBeforeUnmount(() => { cancelAnimationFrame(raf); cancelPlate(); document.title
           <div v-if="post.status"><dt>STATUS</dt><dd class="status">● {{ post.status.toUpperCase() }}</dd></div>
           <div><dt>READ</dt><dd>{{ pad(post.minutes) }} MIN</dd></div>
           <div><dt>SECTIONS</dt><dd>{{ pad(doc.headings.filter((h) => h.level === 2).length) }}</dd></div>
-          <div v-if="dossier"><dt>FILE</dt><dd>{{ dossier.code }} ── {{ dossier.title }}</dd></div>
+          <div v-if="dossier"><dt>FILE</dt><dd>{{ dossier.code }} ── {{ tr(dossier.title) }}</dd></div>
           <div v-if="post.stars !== undefined"><dt>STARS</dt><dd>★ {{ post.stars }}</dd></div>
           <div class="tags"><dt>TAGS</dt><dd><span v-for="t in post.tags" :key="t">#{{ t }}</span></dd></div>
         </dl>
@@ -145,7 +151,7 @@ onBeforeUnmount(() => { cancelAnimationFrame(raf); cancelPlate(); document.title
       <pre class="dither" aria-hidden="true">{{ dither }}</pre>
     </header>
 
-    <main class="page theme-light">
+    <main class="page theme-light" :data-nav-dark="theme === 'dark' ? '' : undefined">
       <AsciiField />
       <div class="layout">
         <aside class="toc mono" aria-label="Contents">
@@ -226,7 +232,12 @@ onBeforeUnmount(() => { cancelAnimationFrame(raf); cancelPlate(); document.title
 .to-top .pc { color: #7b858a; font-size: 9px; letter-spacing: 0.1em; }
 .to-top:hover .pc { color: inherit; }
 .to-top .bk { position: absolute; font-size: 12px; line-height: 1; color: #4d6a70; }
-.to-top .bk { left: -5px; top: -6px; } .to-top .bk.br { left: auto; top: auto; right: -5px; bottom: -6px; }
+.to-top .bk { left: -5px; top: -6px; }
+.to-top .bk.br { left: auto; top: auto; right: -5px; bottom: -6px; }
+:root[data-theme='dark'] .to-top { background: rgba(16, 20, 23, 0.86); border-color: #2b343a; color: #86a6ac; }
+:root[data-theme='dark'] .to-top:hover { background: #86a6ac; color: #101417; }
+:root[data-theme='dark'] .to-top .bk { color: #86a6ac; }
+:root[data-theme='dark'] .dither { background: #101417; color: #0b0e10; }
 .title { margin: 14px 0 22px; max-width: 18em; font: 300 clamp(34px, 5.4vw, 72px)/1.08 var(--font-sans); letter-spacing: -0.01em; color: #dfe3e4; }
 .summary { max-width: 46em; margin: 0 0 44px; color: var(--fog); font-size: 16px; }
 .meta { display: flex; flex-wrap: wrap; margin: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); max-width: 980px; }
@@ -277,7 +288,7 @@ onBeforeUnmount(() => { cancelAnimationFrame(raf); cancelPlate(); document.title
 
 <style>
 /* ── article typography (v-html content, so unscoped under .prose) ── */
-.prose { counter-reset: h2 fig; color: #3a4347; font-size: 16.5px; line-height: 1.85; }
+.prose { counter-reset: h2 fig; color: var(--prose); font-size: 16.5px; line-height: 1.85; }
 .prose > :first-child { margin-top: 0; }
 .prose p { margin: 0 0 1.25em; }
 .prose a { color: var(--accent); border-bottom: 1px dashed var(--accent-dim); }
@@ -300,11 +311,11 @@ onBeforeUnmount(() => { cancelAnimationFrame(raf); cancelPlate(); document.title
 .prose ol > li::marker { font: 500 12px var(--font-mono); color: var(--accent); }
 .prose hr { border: 0; margin: 3em 0; height: 1px; background: repeating-linear-gradient(90deg, var(--line) 0 6px, transparent 6px 10px); }
 
-.prose blockquote { position: relative; margin: 2em 0; padding: 18px 24px 18px 26px; background: rgba(77, 106, 112, 0.07); border-left: 2px solid var(--accent); color: var(--mist); font-size: 18px; line-height: 1.7; }
+.prose blockquote { position: relative; margin: 2em 0; padding: 18px 24px 18px 26px; background: var(--quote); border-left: 2px solid var(--accent); color: var(--mist); font-size: 18px; line-height: 1.7; }
 .prose blockquote::before { content: 'NOTE ──'; display: block; margin-bottom: 8px; font: 500 10px/1 var(--font-mono); letter-spacing: 0.22em; color: var(--accent); }
 .prose blockquote p:last-child { margin: 0; }
 
-.prose :not(pre) > code { padding: 0.12em 0.4em; font: 0.86em var(--font-mono); background: rgba(46, 54, 61, 0.08); border: 1px solid var(--line); color: var(--mist); }
+.prose :not(pre) > code { padding: 0.12em 0.4em; font: 0.86em var(--font-mono); background: var(--code-inline); border: 1px solid var(--line); color: var(--mist); }
 
 .prose .code { margin: 2em 0; background: #111619; border: 1px solid #222a30; color: #c3cacd; box-shadow: 0 18px 40px -24px rgba(13, 16, 19, 0.6); }
 .prose .code figcaption { display: flex; gap: 16px; align-items: center; padding: 9px 14px; border-bottom: 1px dashed #2e363d; font: 500 10px/1 var(--font-mono); letter-spacing: 0.18em; color: #5d666c; text-transform: uppercase; }
@@ -320,7 +331,7 @@ onBeforeUnmount(() => { cancelAnimationFrame(raf); cancelPlate(); document.title
 .hljs-title, .hljs-function .hljs-title, .hljs-title.function_ { color: #dfe3e4; }
 .hljs-params, .hljs-variable { color: #b9bfc2; }
 
-.prose .fig { counter-increment: fig; position: relative; display: block; margin: 2.4em 0; padding: 10px; border: 1px solid var(--line); background: #dde1e2; }
+.prose .fig { counter-increment: fig; position: relative; display: block; margin: 2.4em 0; padding: 10px; border: 1px solid var(--line); background: var(--figure); }
 .prose .fig::before, .prose .fig::after { content: ''; position: absolute; width: 14px; height: 14px; border: 1px solid var(--accent); pointer-events: none; }
 .prose .fig::before { top: -4px; left: -4px; border-right: 0; border-bottom: 0; }
 .prose .fig::after { bottom: -4px; right: -4px; border-left: 0; border-top: 0; }
