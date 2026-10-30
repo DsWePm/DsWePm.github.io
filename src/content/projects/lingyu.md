@@ -1,5 +1,5 @@
 ---
-title: 【东方未来】囹圄
+title: 囹圄
 date: 2023-10-14
 category: cg
 status: shipped
@@ -10,7 +10,7 @@ summary: 一支 77 秒的 3D 渲染练习短片：近未来，基于量子的时
 
 一支 3D 渲染练习作品，发布在我的 B 站空间。
 
-![【东方未来】——囹圄——练习作品](https://www.bilibili.com/video/BV1D841167Rs)
+![囹圄](https://www.bilibili.com/video/BV1D841167Rs)
 
 ## 设定
 
