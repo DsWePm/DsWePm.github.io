@@ -1,3 +1,33 @@
-frontend/src/assets/img/
-frontend/src/assets/logo/
-frontend/src/assets/video/
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Blender working output
+__pycache__/
+tools/blender/out/
+tools/blender/textures/
+
+# third-party models (fetched by hand, see tools/blender/README section in README.md)
+tools/blender/assets/
+

@@ -1,0 +1,41 @@
+/* One palette for the site.
+   Low saturation, low contrast: an overcast city at dusk. */
+:root {
+  --paper: #e3e6e7;       /* overcast-day background for the content */
+  --graphite: #0d1013;
+  --asphalt: #1a1f24;
+  --asphalt-2: #232a30;
+  --line: #2e363d;
+  --fog: #8a9399;
+  --fog-dim: #5d666c;
+  --mist: #b9bfc2;
+  --ground: #cfd2d3;
+  --ink: #2a3034;
+
+  --accent: #6f8a8f;      /* cold teal-grey, HUD lines */
+  --accent-dim: #45585c;
+  --sodium: #9c8460;      /* sodium lamp amber, use sparingly */
+
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-io: cubic-bezier(0.65, 0, 0.35, 1);
+
+  --gutter: clamp(16px, 4vw, 56px);
+}
+
+/* Content below the hero: same roles, overcast-daylight values. */
+.theme-light {
+  --graphite: #e3e6e7;
+  --asphalt: #d8dcde;
+  --asphalt-2: #ced3d5;
+  --line: #bec5c8;
+  --fog: #505a5f;
+  --fog-dim: #7b858a;
+  --mist: #2a3236;
+  --ground: #161b1e;
+  --accent: #4d6a70;
+  --accent-dim: #91a4a8;
+  color: var(--mist);
+}
