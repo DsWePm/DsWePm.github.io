@@ -3,7 +3,7 @@ title: Homepage / Rain-city crack
 date: 2026-10-30
 category: cg
 status: active
-demo: https://dswepm.github.io/Personal_Website/
+demo: https://dswepm.github.io/
 tags: vue, three.js, blender, cycles
 summary: This site itself: a Kowloon Walled City canyon generated procedurally in Blender, a free fall pre-rendered in Cycles, brought back to the web with Vue 3 and three.js.
 cover: hero/slab.jpg

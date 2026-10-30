@@ -3,7 +3,7 @@ title: Homepage / 雨城裂缝
 date: 2026-10-30
 category: cg
 status: active
-demo: https://dswepm.github.io/Personal_Website/
+demo: https://dswepm.github.io/
 tags: vue, three.js, blender, cycles
 summary: 这个网站本身：Blender 程序化生成的九龙城寨峡谷，Cycles 预渲染的自由落体，Vue 3 + three.js 接回网页。
 cover: hero/slab.jpg

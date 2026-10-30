@@ -62,10 +62,10 @@ Demo footage for a dossier card: `blender -b tools/blender/out/city.blend -P too
 ## Deploy
 
 Push to `main`; `.github/workflows/deploy.yml` builds and publishes `dist/` with
-GitHub Pages (Settings → Pages → Source: "GitHub Actions"). In this repository,
-`Personal_Website`, the site is served at https://dswepm.github.io/Personal_Website/;
-the workflow sets the base path from the repository name (a repo named
-`<login>.github.io` would be served at the root). The build also writes
+GitHub Pages (Settings → Pages → Source: "GitHub Actions"). This repository is
+`DsWePm.github.io`, so the site is served at the root, https://dswepm.github.io/;
+the workflow sets the base path from the repository name (any other repository
+name would be served under `/<name>/`). The build also writes
 `404.html` (a copy of `index.html`) so links straight to `/log/...` work on Pages.
 
 On a phone, `npm run dev:lan` serves the dev site over HTTPS on the local network
