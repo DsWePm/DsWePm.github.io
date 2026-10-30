@@ -5,7 +5,6 @@ import { createGlyphAtlas, GLYPHS } from '../three/glyphAtlas'
 const BASE = import.meta.env.BASE_URL
 const ASPECT = 16 / 9
 const PARALLAX = 0.016       // image-uv shift of the slab at full mouse deflection
-const PRELOAD = 24           // fall frames loaded before the hero counts as ready
 const AHEAD = 10             // full-size fall frames decoded ahead of the one on screen
 const KEEP = 16              // full-size frames further than this from the screen are released
 // every fall frame is also kept small, for when the fall outruns the decoder (~80 full frames/s):
@@ -111,9 +110,11 @@ export class HeroStill {
 
   async load(onProgress: (p: number) => void) {
     const tl = new THREE.TextureLoader()
-    let done = 0
-    const total = 4 + PRELOAD
-    const tick = () => onProgress(++done / total)
+    // the loader stays up until every fall frame is in (a fall reaches frames that aren't yet would
+    // stall): the stills are the first 15 % of the bar, the frames the rest
+    let still = 0, framesIn = 0
+    const report = () => onProgress(0.15 * (still / 4) + 0.85 * (this.frames.length ? framesIn / this.frames.length : 0))
+    const tick = () => { still++; report() }
     const tex = (name: string) => tl.loadAsync(BASE + 'hero/' + name).then((t) => {
       t.colorSpace = THREE.NoColorSpace
       t.minFilter = THREE.LinearFilter; t.generateMipmaps = false
@@ -125,9 +126,7 @@ export class HeroStill {
     const u = this.mat.uniforms
     u.tSlab.value = slab; u.tCanyon.value = canyon; u.tDepth.value = depth
     this.frames = new Array(m.frames).fill(null)
-    // first frames before "ready", the rest stream in afterwards
-    await Promise.all(Array.from({ length: Math.min(PRELOAD, m.frames) }, (_, i) => this.loadFrame(i).then(tick)))
-    void this.streamFrames(PRELOAD)
+    await this.streamFrames(() => { framesIn++; report() })
     this.startRain()
     // CPU copy of the mask for the HUD ("over slab" vs "over the void")
     const img = depth.image as HTMLImageElement
@@ -140,9 +139,9 @@ export class HeroStill {
     if (import.meta.env.DEV) (window as unknown as { __hero: HeroStill }).__hero = this
   }
 
-  private async streamFrames(from: number) {
-    const queue = Array.from({ length: this.frames.length - from }, (_, k) => from + k)
-    const worker = async () => { for (let i = queue.shift(); i !== undefined; i = queue.shift()) await this.loadFrame(i) }
+  private async streamFrames(onFrame: () => void) {
+    const queue = this.frames.map((_, i) => i)
+    const worker = async () => { for (let i = queue.shift(); i !== undefined; i = queue.shift()) { await this.loadFrame(i); onFrame() } }
     await Promise.all(Array.from({ length: 6 }, worker))
   }
 
