@@ -7,6 +7,8 @@ import { loadStats as S } from '../composables/loadStats'
 // down the gap to the deepest frame fetched so far, and the side panel reads out the
 // real transfer: frames, data, rate, the last requests, and a map of every frame.
 // When everything is in it locks, then the whole sheet falls away under the slab.
+// The pointer (or a finger) is a searchlight on the shaft: floors not fetched yet show
+// through the noise around it, and the windows of built floors light up.
 const props = defineProps<{ progress: number; done: boolean }>()
 
 const FLOOR_H = 2.8
@@ -15,7 +17,11 @@ const WALL = 7, GAP = 7
 // fallback font's are wider, which would break the columns
 const NOISE = ' .:-=+'
 const WIN = '.*'            // window: dark, lit
+const LEFT0 = 5, RIGHT0 = 5 + WALL + GAP   // columns where the walls start in a row ("F07 [")
+const ROW_LEN = RIGHT0 + WALL + 1
 const now = ref(performance.now() / 1000)
+const scan = ref<{ row: number; col: number } | null>(null)
+const shaft = ref<HTMLElement>()
 let raf = 0, last = 0
 
 // a fixed facade per floor and side, so built floors hold still
@@ -44,6 +50,13 @@ function noise(n: number, t: number, seed: number) {
 function light(wall: string, f: number, side: number, t: number) {
   return wall.replace(/\./g, (m, i: number) => (hash(f * 17 + side * 5 + i + Math.floor(t * 0.7 + hash(f + i))) > 0.82 ? WIN[1] : m))
 }
+/** how strongly the searchlight falls on column `col` of floor `f` (0..1) */
+function lit(f: number, col: number) {
+  const s = scan.value
+  if (!s) return 0
+  const d = Math.hypot((col - s.col) / 2.2, f - s.row)
+  return Math.max(0, 1 - d / 2.6)
+}
 const rows = computed(() => {
   const t = now.value
   const p = probe.value, pf = Math.floor(p)
@@ -56,6 +69,14 @@ const rows = computed(() => {
       const mix = (w: string, seed: number) => [...w].map((c, i) => (hash(seed + i) < k ? c : noise(1, t, seed + i))).join('')
       left = mix(l, f * 3); right = mix(r, f * 3 + 1); state = 'building'
     } else { left = noise(WALL, t, f * 7); right = noise(WALL, t, f * 7 + 3); state = 'pending' }
+    // the searchlight: unbuilt walls show through, built windows light up
+    const beam = (w: string, plan: string, col0: number) => [...w].map((c, i) => {
+      const k = lit(f, col0 + i)
+      if (!k) return c
+      if (state === 'built') return c === WIN[0] && k > 0.25 ? WIN[1] : c
+      return k > 0.35 || hash(i + f * 9 + Math.floor(t * 12)) < k * 2 ? plan[i] : c
+    }).join('')
+    if (scan.value && Math.abs(f - scan.value.row) < 3) { left = beam(left, l, LEFT0); right = beam(right, r, RIGHT0) }
     // the gap: rain down the built part of the shaft, the probe at its foot
     let gap = ''
     for (let i = 0; i < GAP; i++) {
@@ -63,7 +84,7 @@ const rows = computed(() => {
       gap += (f < pf || locked.value) && drop ? (i % 2 ? '|' : ':') : ' '
     }
     const at = f === pf && !locked.value
-    return { tag: `F${String(f).padStart(2, '0')}`, left, gap: at ? [gap.slice(0, 3), gap.slice(4)] : [gap, ''], right, state, at }
+    return { tag: `F${String(f).padStart(2, '0')}`, left, gap: at ? [gap.slice(0, 3), gap.slice(4)] : [gap, ''], right, state, at, scanned: scan.value?.row === f, near: !!scan.value && Math.abs(f - scan.value.row) <= 1 }
   })
 })
 
@@ -75,6 +96,22 @@ const eta = computed(() => {
   const total = (S.bytes / S.done) * S.total, s = Math.max(0, (total - S.bytes) / 1048576 / Math.max(rate.value, 0.01))
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.ceil(s % 60)).padStart(2, '0')}`
 })
+// header: the survey, or what the searchlight is on
+const head = computed(() => {
+  const s = scan.value
+  if (!s) return `SHAFT SURVEY // SECTOR 07 ─ Z ${alt.value}m`
+  const f = s.row, st = rows.value[f]?.state ?? 'pending'
+  return `SCAN F${String(f).padStart(2, '0')} ─ −${(f * FLOOR_H).toFixed(1)}m ─ ${{ built: 'MAPPED', building: 'RESOLVING', pending: 'NO SIGNAL' }[st]}`
+})
+function onScan(e: PointerEvent) {
+  const pre = shaft.value
+  if (!pre) return
+  const r = pre.getBoundingClientRect()
+  const n = rows.value.length
+  scan.value = { row: Math.floor(((e.clientY - r.top) / r.height) * n), col: ((e.clientX - r.left) / r.width) * ROW_LEN }
+  if (scan.value.row < 0 || scan.value.row >= n) scan.value = null
+}
+
 const pct = computed(() => String(Math.round(props.progress * 100)).padStart(3, '0'))
 const status = computed(() => (locked.value ? 'SIGNAL LOCKED ▸ DESCEND' : S.done ? 'SURVEYING SHAFT' : 'MOUNTING SECTOR/07'))
 
@@ -91,10 +128,10 @@ onBeforeUnmount(() => cancelAnimationFrame(raf))
 <template>
   <Transition name="loader">
     <div v-if="!done" class="loader" :class="{ locked }" role="status" :aria-label="`Loading ${pct}%`">
-      <section class="shaft mono" aria-hidden="true">
-        <p class="hd">┌─ SHAFT SURVEY // SECTOR 07 ─ Z {{ alt }}m</p>
+      <section class="shaft mono" aria-hidden="true" data-cursor="scan" @pointermove="onScan" @pointerdown="onScan" @pointerleave="scan = null">
+        <p class="hd" :class="{ scanning: scan }">┌─ {{ head }}</p>
         <!-- the probe sits in a one-character box so its wider fallback glyph keeps the columns -->
-        <pre><span v-for="r in rows" :key="r.tag" class="row" :class="[r.state, { at: r.at }]"><i>{{ r.tag }}</i> [{{ r.left }}<b>{{ r.gap[0] }}<u v-if="r.at" class="probe">▼</u>{{ r.gap[1] }}</b>{{ r.right }}]
+        <pre ref="shaft"><span v-for="r in rows" :key="r.tag" class="row" :class="[r.state, { at: r.at, scanned: r.scanned, near: r.near }]"><i>{{ r.tag }}</i> [{{ r.left }}<b>{{ r.gap[0] }}<u v-if="r.at" class="probe">▼</u>{{ r.gap[1] }}</b>{{ r.right }}]
 </span></pre>
         <p class="hd">└─ FLOOR ─ {{ fmt(S.maxDepth) }}m</p>
       </section>
@@ -138,6 +175,11 @@ onBeforeUnmount(() => cancelAnimationFrame(raf))
 .row.built { color: #505a5f; }
 .row.at i { color: #4d6a70; }
 .row.at b { color: var(--sodium); }
+.row.scanned i { color: var(--sodium); }
+.row.pending.near { color: #8f9a9e; }
+.row.built.near { color: #2a3236; }
+.hd.scanning { color: #4d6a70; }
+.shaft { touch-action: none; }
 .probe { display: inline-block; width: 1ch; text-decoration: none; text-align: center; overflow: visible; font-size: 0.8em; line-height: 1; }
 /* telemetry */
 .meta { width: 268px; font-size: 11px; letter-spacing: 0.14em; }

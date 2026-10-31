@@ -129,7 +129,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.hud-cursor { position: fixed; inset: 0; z-index: 95; pointer-events: none; color: #c6cbcd; mix-blend-mode: difference; }
+.hud-cursor { position: fixed; inset: 0; z-index: 110;   /* over the loading screen too */ pointer-events: none; color: #c6cbcd; mix-blend-mode: difference; }
 
 .reticle { position: absolute; left: 0; top: 0; width: 64px; height: 64px; }
 svg { display: block; overflow: visible; }

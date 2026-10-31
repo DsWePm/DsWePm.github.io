@@ -9,13 +9,14 @@ const PARALLAX = 0.016       // image-uv shift of the slab at full mouse deflect
 // Phones get a far smaller frame budget: iOS kills a page's process (and reloads it, over and
 // over) once it holds a few hundred MB, and every browser on iOS is WebKit.
 const PHONE = matchMedia('(pointer: coarse)').matches || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
-const AHEAD = PHONE ? 6 : 10         // decoded fall frames ahead of the one on screen
+const AHEAD = PHONE ? 2 : 10         // decoded fall frames ahead of the one on screen
 const MAX_DECODED = PHONE ? 10 : 24  // decoded fall frames held at once (~8 MB each at 1080p, ~3.7 MB at 720p)
 const DECODERS = PHONE ? 2 : 4       // decodes in flight
-// On desktop every fall frame is also kept small, for when the fall outruns the decoder (~80 full
-// frames/s): 640 x 360 (~230 MB) where there is memory for it, else 480 x 270 (~130 MB). Phones skip
-// it and decode at 720p, which their screens barely tell from 1080p.
-const LOW = PHONE ? null : ((navigator as { deviceMemory?: number }).deviceMemory ?? 4) >= 8 ? [640, 360] : [480, 270]
+// Every fall frame is also kept small, for when the fall outruns the decoder (~80 full frames/s on
+// desktop, far fewer on a phone): 640 x 360 (~230 MB) where there is memory for it, 480 x 270
+// (~130 MB) on other desktops, 384 x 216 (~84 MB) on phones. Phones decode full frames at 720p,
+// which their screens barely tell from 1080p.
+const LOW = PHONE ? [384, 216] : ((navigator as { deviceMemory?: number }).deviceMemory ?? 4) >= 8 ? [640, 360] : [480, 270]
 const FULL = PHONE ? { resizeWidth: 1280, resizeHeight: 720, resizeQuality: 'high' as ResizeQuality } : {}
 const BITMAP: ImageBitmapOptions = { imageOrientation: 'flipY', premultiplyAlpha: 'none', colorSpaceConversion: 'none' }
 const damp = (a: number, b: number, l: number, dt: number) => b + (a - b) * Math.exp(-l * dt)
@@ -61,6 +62,8 @@ export class HeroStill {
   private release: ImageBitmap[] = []
   private releasing = false
   private lows: (ImageBitmap | null)[] = []
+  private lowsOk = true       // off if the browser ignores resizeWidth: full-size copies would sink a phone
+  private lastFrame = -1      // the frame last put on screen
   private slots = [new THREE.Texture(), new THREE.Texture()]
   private slotFrame = [-1, -1]
   private lowSlots = [new THREE.Texture(), new THREE.Texture()]
@@ -111,7 +114,11 @@ export class HeroStill {
       .then(async (b) => {
         this.frames[i] = b
         statsFrame(i, this.frameUrl(i).split('/').pop()!, b?.size ?? 0, (f) => this.meta.z[f] ?? 0)
-        if (b && LOW) this.lows[i] = await createImageBitmap(b, { ...BITMAP, resizeWidth: LOW[0], resizeHeight: LOW[1], resizeQuality: 'medium' })
+        if (!b || !this.lowsOk) return
+        const low = await createImageBitmap(b, { ...BITMAP, resizeWidth: LOW[0], resizeHeight: LOW[1], resizeQuality: 'medium' })
+        if (low.width === LOW[0]) { this.lows[i] = low; return }
+        low.close(); this.lowsOk = false
+        this.lows.forEach((l) => l?.close()); this.lows = []
       })
       .catch(() => {})
   }
@@ -251,6 +258,16 @@ export class HeroStill {
 
   private ready(i: number) { return this.bitmaps.has(i) || !!this.lows[i] }
 
+  /**
+   * the frame to show for `a` moving in `dir`: the nearest ready one not past `a`, back to the last
+   * frame shown, so a frame decoded further ahead never flashes up before the ones in between
+   */
+  private pick(a: number, dir: number) {
+    const n = this.frames.length
+    for (let i = a; i >= 0 && i < n && (this.lastFrame < 0 || (i - this.lastFrame) * dir >= 0); i -= dir) if (this.ready(i)) return i
+    return this.nearestReady(a)
+  }
+
   private nearestReady(i: number) {
     for (let d = 0; d < this.frames.length; d++) {
       if (this.ready(i - d)) return i - d
@@ -270,13 +287,16 @@ export class HeroStill {
     // release first, so the budget has room: frames left behind or beyond the stretch being decoded
     for (const [i, b] of this.bitmaps) {
       const ahead = (i - a) * dir
-      if (ahead >= -2 && ahead <= AHEAD * stride + 2) continue
+      if ((ahead >= -2 && ahead <= AHEAD * stride + 2) || i === this.lastFrame) continue
       // already uploaded if it sits in a slot; forget the slot so it is never reused without its bitmap
       const k = this.slotFrame.indexOf(i)
       if (k >= 0) this.slotFrame[k] = -1
       this.bitmaps.delete(i); this.release.push(b)
     }
-    for (let k = 0; k <= AHEAD && this.decoding.size < DECODERS && this.bitmaps.size + this.decoding.size < MAX_DECODED; k++) {
+    // a phone can't decode and upload full frames while falling without stuttering: it falls on the
+    // small copies and sharpens the frame it comes to rest on
+    const settled = !PHONE || !this.lowsOk || Math.abs(target - a) < 1.5
+    for (let k = 0; settled && k <= AHEAD && this.decoding.size < DECODERS && this.bitmaps.size + this.decoding.size < MAX_DECODED; k++) {
       const i = a + dir * (k < 2 ? k : 1 + (k - 1) * stride)      // the next frame always, for the crossfade
       if (i < 0 || i >= n) break
       const blob = this.frames[i]
@@ -311,8 +331,9 @@ export class HeroStill {
     this.shown = Math.abs(this.target - this.shown) < 0.002 ? this.target : this.shown
     const a = Math.min(n - 1, Math.floor(this.shown)), b = Math.min(n - 1, a + 1)
     this.warm(a, this.target)
-    // a frame not even fetched yet (a flick right after load): hold the nearest one
-    const ia = this.nearestReady(a), ib = ia === a && this.ready(b) ? b : ia
+    // not decoded yet: hold the last frame in hand on this side rather than jump about
+    const ia = this.pick(a, this.target >= this.shown ? 1 : -1), ib = ia === a && this.ready(b) ? b : ia
+    if (ia >= 0) this.lastFrame = ia
     const u = this.mat.uniforms
     if (ia >= 0) { u.tFrameA.value = this.bind(ia); u.tFrameB.value = this.bind(ib) }
     // short crossfade between neighbours: mostly one sharp frame, never a double image
