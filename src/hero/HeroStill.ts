@@ -1,15 +1,22 @@
 import * as THREE from 'three'
 import { quadVert, heroFrag, rippleFrag } from './shaders'
 import { createGlyphAtlas, GLYPHS } from '../three/glyphAtlas'
+import { statsBegin, statsFrame } from '../composables/loadStats'
 
 const BASE = import.meta.env.BASE_URL
 const ASPECT = 16 / 9
 const PARALLAX = 0.016       // image-uv shift of the slab at full mouse deflection
-const AHEAD = 10             // full-size fall frames decoded ahead of the one on screen
-const KEEP = 16              // full-size frames further than this from the screen are released
-// every fall frame is also kept small, for when the fall outruns the decoder (~80 full frames/s):
-// 640 x 360 (~230 MB) where there is memory for it, else 480 x 270 (~130 MB)
-const LOW = ((navigator as { deviceMemory?: number }).deviceMemory ?? 4) >= 8 ? [640, 360] : [480, 270]
+// Phones get a far smaller frame budget: iOS kills a page's process (and reloads it, over and
+// over) once it holds a few hundred MB, and every browser on iOS is WebKit.
+const PHONE = matchMedia('(pointer: coarse)').matches || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+const AHEAD = PHONE ? 6 : 10         // decoded fall frames ahead of the one on screen
+const MAX_DECODED = PHONE ? 10 : 24  // decoded fall frames held at once (~8 MB each at 1080p, ~3.7 MB at 720p)
+const DECODERS = PHONE ? 2 : 4       // decodes in flight
+// On desktop every fall frame is also kept small, for when the fall outruns the decoder (~80 full
+// frames/s): 640 x 360 (~230 MB) where there is memory for it, else 480 x 270 (~130 MB). Phones skip
+// it and decode at 720p, which their screens barely tell from 1080p.
+const LOW = PHONE ? null : ((navigator as { deviceMemory?: number }).deviceMemory ?? 4) >= 8 ? [640, 360] : [480, 270]
+const FULL = PHONE ? { resizeWidth: 1280, resizeHeight: 720, resizeQuality: 'high' as ResizeQuality } : {}
 const BITMAP: ImageBitmapOptions = { imageOrientation: 'flipY', premultiplyAlpha: 'none', colorSpaceConversion: 'none' }
 const damp = (a: number, b: number, l: number, dt: number) => b + (a - b) * Math.exp(-l * dt)
 const smooth = (a: number, b: number, v: number) => { const t = Math.min(1, Math.max(0, (v - a) / (b - a))); return t * t * (3 - 2 * t) }
@@ -103,7 +110,8 @@ export class HeroStill {
       .then((r) => (r.ok ? r.blob() : null))
       .then(async (b) => {
         this.frames[i] = b
-        if (b) this.lows[i] = await createImageBitmap(b, { ...BITMAP, resizeWidth: LOW[0], resizeHeight: LOW[1], resizeQuality: 'medium' })
+        statsFrame(i, this.frameUrl(i).split('/').pop()!, b?.size ?? 0, (f) => this.meta.z[f] ?? 0)
+        if (b && LOW) this.lows[i] = await createImageBitmap(b, { ...BITMAP, resizeWidth: LOW[0], resizeHeight: LOW[1], resizeQuality: 'medium' })
       })
       .catch(() => {})
   }
@@ -126,6 +134,7 @@ export class HeroStill {
     const u = this.mat.uniforms
     u.tSlab.value = slab; u.tCanyon.value = canyon; u.tDepth.value = depth
     this.frames = new Array(m.frames).fill(null)
+    statsBegin(m.frames, m.depth)
     await this.streamFrames(() => { framesIn++; report() })
     this.startRain()
     // CPU copy of the mask for the HUD ("over slab" vs "over the void")
@@ -258,32 +267,34 @@ export class HeroStill {
     const n = this.frames.length
     const dir = target >= a ? 1 : -1
     const stride = Math.max(1, Math.ceil(Math.abs(target - a) / AHEAD))
-    for (let k = 0; k <= AHEAD && this.decoding.size < 4; k++) {
-      const i = a + dir * (k < 2 ? k : 1 + (k - 1) * stride)      // the next frame always, for the crossfade
-      if (i < 0 || i >= n) break
-      const blob = this.frames[i]
-      if (!blob || this.bitmaps.has(i) || this.decoding.has(i)) continue
-      this.decoding.add(i)
-      createImageBitmap(blob, BITMAP)
-        .then((b) => { this.bitmaps.set(i, b) })
-        .catch(() => {})
-        .finally(() => this.decoding.delete(i))
-    }
+    // release first, so the budget has room: frames left behind or beyond the stretch being decoded
     for (const [i, b] of this.bitmaps) {
       const ahead = (i - a) * dir
-      if (ahead >= -4 && ahead <= KEEP * stride) continue
+      if (ahead >= -2 && ahead <= AHEAD * stride + 2) continue
       // already uploaded if it sits in a slot; forget the slot so it is never reused without its bitmap
       const k = this.slotFrame.indexOf(i)
       if (k >= 0) this.slotFrame[k] = -1
       this.bitmaps.delete(i); this.release.push(b)
     }
+    for (let k = 0; k <= AHEAD && this.decoding.size < DECODERS && this.bitmaps.size + this.decoding.size < MAX_DECODED; k++) {
+      const i = a + dir * (k < 2 ? k : 1 + (k - 1) * stride)      // the next frame always, for the crossfade
+      if (i < 0 || i >= n) break
+      const blob = this.frames[i]
+      if (!blob || this.bitmaps.has(i) || this.decoding.has(i)) continue
+      this.decoding.add(i)
+      createImageBitmap(blob, { ...BITMAP, ...FULL })
+        .then((b) => { this.bitmaps.set(i, b) })
+        .catch(() => {})
+        .finally(() => this.decoding.delete(i))
+    }
     // close() is slow-ish (a few ms each), so released frames are closed between frames
     if (this.release.length && !this.releasing) {
       this.releasing = true
       const idle = window.requestIdleCallback ?? ((f: () => void) => setTimeout(f, 50))
-      idle(() => { this.releasing = false; this.release.splice(0, 4).forEach((b) => b.close()) })
+      idle(() => { this.releasing = false; this.release.splice(0, PHONE ? 8 : 4).forEach((b) => b.close()) })
     }
   }
+
 
   /** the texture holding frame i (full size if decoded, else the small copy), uploading it if needed */
   private bind(i: number) {
