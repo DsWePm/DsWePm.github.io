@@ -13,10 +13,11 @@ const AHEAD = PHONE ? 2 : 10         // decoded fall frames ahead of the one on 
 const MAX_DECODED = PHONE ? 10 : 24  // decoded fall frames held at once (~8 MB each at 1080p, ~3.7 MB at 720p)
 const DECODERS = PHONE ? 2 : 4       // decodes in flight
 // Every fall frame is also kept small, for when the fall outruns the decoder (~80 full frames/s on
-// desktop, far fewer on a phone): 640 x 360 (~230 MB) where there is memory for it, 480 x 270
-// (~130 MB) on other desktops, 384 x 216 (~84 MB) on phones. Phones decode full frames at 720p,
-// which their screens barely tell from 1080p.
-const LOW = PHONE ? [384, 216] : ((navigator as { deviceMemory?: number }).deviceMemory ?? 4) >= 8 ? [640, 360] : [480, 270]
+// desktop, far fewer on a phone), as one layer each of a single texture array on the GPU: 640 x 360
+// (~230 MB) where there is memory for it, 480 x 270 (~130 MB) on other desktops, 320 x 180 (~58 MB)
+// on phones. Not as ImageBitmaps: WebKit backs each with its own buffer, and a few hundred of them,
+// however small, get the page killed. Phones decode full frames at 720p.
+const LOW = PHONE ? [320, 180] : ((navigator as { deviceMemory?: number }).deviceMemory ?? 4) >= 8 ? [640, 360] : [480, 270]
 const FULL = PHONE ? { resizeWidth: 1280, resizeHeight: 720, resizeQuality: 'high' as ResizeQuality } : {}
 const BITMAP: ImageBitmapOptions = { imageOrientation: 'flipY', premultiplyAlpha: 'none', colorSpaceConversion: 'none' }
 const damp = (a: number, b: number, l: number, dt: number) => b + (a - b) * Math.exp(-l * dt)
@@ -61,13 +62,13 @@ export class HeroStill {
   private decoding = new Set<number>()
   private release: ImageBitmap[] = []
   private releasing = false
-  private lows: (ImageBitmap | null)[] = []
-  private lowsOk = true       // off if the browser ignores resizeWidth: full-size copies would sink a phone
+  private lowTex: THREE.DataArrayTexture | null = null
+  private lowGl: WebGLTexture | null = null
+  private lowHas = new Uint8Array(0)
+  private lowsOk = true       // off without array room, or if the browser ignores resizeWidth
   private lastFrame = -1      // the frame last put on screen
   private slots = [new THREE.Texture(), new THREE.Texture()]
   private slotFrame = [-1, -1]
-  private lowSlots = [new THREE.Texture(), new THREE.Texture()]
-  private lowFrame = [-1, -1]
   private target = 0          // frame the scroll asks for
   private shown = 0           // frame on screen (damped)
   private impactArmed = true
@@ -83,13 +84,14 @@ export class HeroStill {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5))   // full-screen shader: 2x costs ~1.8x the fill for little gain
     this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace    // images are already display-referred
     // bitmaps arrive flipped already (createImageBitmap below); WebGL ignores flipY for them
-    for (const t of [...this.slots, ...this.lowSlots]) { t.colorSpace = THREE.NoColorSpace; t.minFilter = THREE.LinearFilter; t.generateMipmaps = false; t.flipY = false }
+    for (const t of this.slots) { t.colorSpace = THREE.NoColorSpace; t.minFilter = THREE.LinearFilter; t.generateMipmaps = false; t.flipY = false }
     const black = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1); black.needsUpdate = true
     this.mat = new THREE.ShaderMaterial({
       vertexShader: quadVert, fragmentShader: heroFrag, depthTest: false,
       uniforms: {
         tSlab: { value: null }, tCanyon: { value: null }, tDepth: { value: null }, tRipple: { value: null },
         tFrameA: { value: black }, tFrameB: { value: black }, tRain: { value: black },
+        tLow: { value: null }, uLowA: { value: -1 }, uLowB: { value: -1 },
         tGlyph: { value: createGlyphAtlas() }, uGlyphs: { value: [...GLYPHS].length }, uCell: { value: 9 },
         uRes: { value: new THREE.Vector2(1, 1) }, uImgAspect: { value: ASPECT },
         uShift: { value: new THREE.Vector2() }, uPointer: { value: this.pointerUv }, uPointerOn: { value: 0 },
@@ -114,11 +116,18 @@ export class HeroStill {
       .then(async (b) => {
         this.frames[i] = b
         statsFrame(i, this.frameUrl(i).split('/').pop()!, b?.size ?? 0, (f) => this.meta.z[f] ?? 0)
-        if (!b || !this.lowsOk) return
+        if (!b || !this.lowsOk || !this.lowGl) return
         const low = await createImageBitmap(b, { ...BITMAP, resizeWidth: LOW[0], resizeHeight: LOW[1], resizeQuality: 'medium' })
-        if (low.width === LOW[0]) { this.lows[i] = low; return }
-        low.close(); this.lowsOk = false
-        this.lows.forEach((l) => l?.close()); this.lows = []
+        if (low.width !== LOW[0] || low.height !== LOW[1]) { low.close(); this.lowsOk = false; return }
+        // straight into its layer, then let the bitmap go
+        const gl = this.renderer.getContext() as WebGL2RenderingContext
+        this.renderer.state.bindTexture(gl.TEXTURE_2D_ARRAY, this.lowGl)
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false)
+        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false)
+        gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE)
+        gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, i, LOW[0], LOW[1], 1, gl.RGBA, gl.UNSIGNED_BYTE, low)
+        low.close()
+        this.lowHas[i] = 1
       })
       .catch(() => {})
   }
@@ -141,6 +150,7 @@ export class HeroStill {
     const u = this.mat.uniforms
     u.tSlab.value = slab; u.tCanyon.value = canyon; u.tDepth.value = depth
     this.frames = new Array(m.frames).fill(null)
+    this.makeLows(m.frames)
     statsBegin(m.frames, m.depth)
     await this.streamFrames(() => { framesIn++; report() })
     this.startRain()
@@ -256,7 +266,22 @@ export class HeroStill {
     loop()
   }
 
-  private ready(i: number) { return this.bitmaps.has(i) || !!this.lows[i] }
+  /** the texture array for the small frames: storage only, filled layer by layer as they decode */
+  private makeLows(n: number) {
+    const gl = this.renderer.getContext() as WebGL2RenderingContext
+    this.lowHas = new Uint8Array(n)
+    if (gl.getParameter(gl.MAX_ARRAY_TEXTURE_LAYERS) < n) { this.lowsOk = false; return }
+    const t = new THREE.DataArrayTexture(null, LOW[0], LOW[1], n)
+    t.colorSpace = THREE.NoColorSpace; t.minFilter = t.magFilter = THREE.LinearFilter; t.generateMipmaps = false
+    t.source.dataReady = false              // allocate, don't upload
+    t.needsUpdate = true                    // (three only creates the GL texture for a version > 0)
+    this.renderer.initTexture(t)
+    this.lowTex = t
+    this.lowGl = (this.renderer.properties.get(t) as { __webglTexture: WebGLTexture }).__webglTexture
+    this.mat.uniforms.tLow.value = t
+  }
+
+  private ready(i: number) { return this.bitmaps.has(i) || !!this.lowHas[i] }
 
   /**
    * the frame to show for `a` moving in `dir`: the nearest ready one not past `a`, back to the last
@@ -316,14 +341,14 @@ export class HeroStill {
   }
 
 
-  /** the texture holding frame i (full size if decoded, else the small copy), uploading it if needed */
-  private bind(i: number) {
-    const k = i & 1
-    const full = this.bitmaps.get(i)
-    const [slots, at] = full ? [this.slots, this.slotFrame] : [this.lowSlots, this.lowFrame]
-    const t = slots[k]
-    if (at[k] !== i) { t.image = full ?? this.lows[i]!; t.needsUpdate = true; at[k] = i }
-    return t
+  /** frame i into slot `which` (A or B): its full-size texture if decoded (uploading it if needed), else its layer of the small ones */
+  private bind(i: number, which: 'A' | 'B') {
+    const u = this.mat.uniforms, full = this.bitmaps.get(i)
+    if (!full) { u['uLow' + which].value = i; return }
+    const k = i & 1, t = this.slots[k]
+    if (this.slotFrame[k] !== i) { t.image = full; t.needsUpdate = true; this.slotFrame[k] = i }
+    u['tFrame' + which].value = t
+    u['uLow' + which].value = -1
   }
 
   private updateFrames(prev: number) {
@@ -335,7 +360,7 @@ export class HeroStill {
     const ia = this.pick(a, this.target >= this.shown ? 1 : -1), ib = ia === a && this.ready(b) ? b : ia
     if (ia >= 0) this.lastFrame = ia
     const u = this.mat.uniforms
-    if (ia >= 0) { u.tFrameA.value = this.bind(ia); u.tFrameB.value = this.bind(ib) }
+    if (ia >= 0) { this.bind(ia, 'A'); this.bind(ib, 'B') }
     // short crossfade between neighbours: mostly one sharp frame, never a double image
     u.uFrameMix.value = ib === b && ia === a ? smooth(0.3, 0.7, this.shown - a) : 0
     // the still hands over to frame 0 within the first fraction of a frame
@@ -401,7 +426,8 @@ export class HeroStill {
 
   dispose() {
     cancelAnimationFrame(this.raf)
-    for (const b of [...this.bitmaps.values(), ...this.release, ...this.lows]) b?.close()
+    for (const b of [...this.bitmaps.values(), ...this.release]) b.close()
+    this.lowTex?.dispose()
     this.rainVideo?.pause()
     this.renderer.dispose()
   }

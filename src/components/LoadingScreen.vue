@@ -7,8 +7,9 @@ import { loadStats as S } from '../composables/loadStats'
 // down the gap to the deepest frame fetched so far, and the side panel reads out the
 // real transfer: frames, data, rate, the last requests, and a map of every frame.
 // When everything is in it locks, then the whole sheet falls away under the slab.
-// The pointer (or a finger) is a searchlight on the shaft: floors not fetched yet show
-// through the noise around it, and the windows of built floors light up.
+// The pointer (or a finger) reveals the shaft around it (floors not fetched yet show
+// through the noise, built windows light up) and sends rings of characters out across
+// it like ripples. Both only swap characters, so nothing on the page moves.
 const props = defineProps<{ progress: number; done: boolean }>()
 
 const FLOOR_H = 2.8
@@ -17,10 +18,13 @@ const WALL = 7, GAP = 7
 // fallback font's are wider, which would break the columns
 const NOISE = ' .:-=+'
 const WIN = '.*'            // window: dark, lit
-const LEFT0 = 5, RIGHT0 = 5 + WALL + GAP   // columns where the walls start in a row ("F07 [")
-const ROW_LEN = RIGHT0 + WALL + 1
+const BODY0 = 5, BODY = WALL * 2 + GAP     // the walls and gap start at column 5 of a row ("F07 [")
+const ROW_LEN = BODY0 + BODY + 1
+const ASPECT = 2.2                          // a row is about this many columns tall
+const WAVE = '~=-'                          // ripple ring, strongest first
 const now = ref(performance.now() / 1000)
-const scan = ref<{ row: number; col: number } | null>(null)
+const hover = ref<{ row: number; col: number } | null>(null)
+const ripples: { row: number; col: number; t0: number }[] = []
 const shaft = ref<HTMLElement>()
 let raf = 0, last = 0
 
@@ -38,7 +42,7 @@ const floors = computed(() => Math.round(S.maxDepth / FLOOR_H))
 const facades = computed(() => Array.from({ length: floors.value + 1 }, (_, f) => [facade(f, 0), facade(f, 1)]))
 // the probe goes down with the frames in hand (the first ~40 % are still above the slab)
 const probe = computed(() => Math.min(floors.value, (S.reached / S.total) * (floors.value + 1)))
-const alt = computed(() => (S.alt >= 0 ? '+' : '−') + Math.abs(S.alt).toFixed(1))
+const alt = computed(() => ((S.alt >= 0 ? '+' : '−') + Math.abs(S.alt).toFixed(1)).padStart(5, ' '))   // fixed width: the header sets the column's width
 const locked = computed(() => props.progress >= 1)
 
 function noise(n: number, t: number, seed: number) {
@@ -50,13 +54,8 @@ function noise(n: number, t: number, seed: number) {
 function light(wall: string, f: number, side: number, t: number) {
   return wall.replace(/\./g, (m, i: number) => (hash(f * 17 + side * 5 + i + Math.floor(t * 0.7 + hash(f + i))) > 0.82 ? WIN[1] : m))
 }
-/** how strongly the searchlight falls on column `col` of floor `f` (0..1) */
-function lit(f: number, col: number) {
-  const s = scan.value
-  if (!s) return 0
-  const d = Math.hypot((col - s.col) / 2.2, f - s.row)
-  return Math.max(0, 1 - d / 2.6)
-}
+/** distance from the pointer in rows, columns scaled to match */
+const dist = (f: number, col: number, p: { row: number; col: number }) => Math.hypot((col - p.col) / ASPECT, f - p.row)
 const rows = computed(() => {
   const t = now.value
   const p = probe.value, pf = Math.floor(p)
@@ -69,22 +68,35 @@ const rows = computed(() => {
       const mix = (w: string, seed: number) => [...w].map((c, i) => (hash(seed + i) < k ? c : noise(1, t, seed + i))).join('')
       left = mix(l, f * 3); right = mix(r, f * 3 + 1); state = 'building'
     } else { left = noise(WALL, t, f * 7); right = noise(WALL, t, f * 7 + 3); state = 'pending' }
-    // the searchlight: unbuilt walls show through, built windows light up
-    const beam = (w: string, plan: string, col0: number) => [...w].map((c, i) => {
-      const k = lit(f, col0 + i)
-      if (!k) return c
-      if (state === 'built') return c === WIN[0] && k > 0.25 ? WIN[1] : c
-      return k > 0.35 || hash(i + f * 9 + Math.floor(t * 12)) < k * 2 ? plan[i] : c
-    }).join('')
-    if (scan.value && Math.abs(f - scan.value.row) < 3) { left = beam(left, l, LEFT0); right = beam(right, r, RIGHT0) }
-    // the gap: rain down the built part of the shaft, the probe at its foot
+    // the gap: rain down the built part of the shaft
     let gap = ''
     for (let i = 0; i < GAP; i++) {
       const drop = hash(i * 3.7 + Math.floor(t * 14 - f + hash(i) * 40)) > 0.93
       gap += (f < pf || locked.value) && drop ? (i % 2 ? '|' : ':') : ' '
     }
     const at = f === pf && !locked.value
-    return { tag: `F${String(f).padStart(2, '0')}`, left, gap: at ? [gap.slice(0, 3), gap.slice(4)] : [gap, ''], right, state, at, scanned: scan.value?.row === f, near: !!scan.value && Math.abs(f - scan.value.row) <= 1 }
+    const plan = l + ' '.repeat(GAP) + r
+    const body = [...(left + gap + right)].map((c, i) => {
+      const col = BODY0 + i
+      if (at && i === WALL + 3) return c                     // the probe's cell
+      // ripples: a ring of wave characters, fading as it spreads
+      for (const w of ripples) {
+        const age = t - w.t0, k = 1 - age / 1.4
+        if (k > 0 && Math.abs(dist(f, col, w) - age * 7) < 0.55) return WAVE[Math.min(2, Math.floor((1 - k) * 3))]
+      }
+      // the reveal: a soft-edged disc around the pointer (dithered edge, no flicker)
+      const h = hover.value
+      if (h) {
+        const k = 1 - dist(f, col, h) / 2.4
+        if (k > 0 && hash(f * 41 + i * 7) < k * 1.6) {
+          if (state === 'built') return c === WIN[0] ? WIN[1] : c
+          if (i < WALL || i >= WALL + GAP) return plan[i]
+        }
+      }
+      return c
+    }).join('')
+    left = body.slice(0, WALL); gap = body.slice(WALL, WALL + GAP); right = body.slice(WALL + GAP)
+    return { tag: `F${String(f).padStart(2, '0')}`, left, gap: at ? [gap.slice(0, 3), gap.slice(4)] : [gap, ''], right, state, at }
   })
 })
 
@@ -96,20 +108,20 @@ const eta = computed(() => {
   const total = (S.bytes / S.done) * S.total, s = Math.max(0, (total - S.bytes) / 1048576 / Math.max(rate.value, 0.01))
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.ceil(s % 60)).padStart(2, '0')}`
 })
-// header: the survey, or what the searchlight is on
-const head = computed(() => {
-  const s = scan.value
-  if (!s) return `SHAFT SURVEY // SECTOR 07 ─ Z ${alt.value}m`
-  const f = s.row, st = rows.value[f]?.state ?? 'pending'
-  return `SCAN F${String(f).padStart(2, '0')} ─ −${(f * FLOOR_H).toFixed(1)}m ─ ${{ built: 'MAPPED', building: 'RESOLVING', pending: 'NO SIGNAL' }[st]}`
-})
-function onScan(e: PointerEvent) {
+let lastRipple = 0
+function onPointer(e: PointerEvent) {
   const pre = shaft.value
   if (!pre) return
   const r = pre.getBoundingClientRect()
-  const n = rows.value.length
-  scan.value = { row: Math.floor(((e.clientY - r.top) / r.height) * n), col: ((e.clientX - r.left) / r.width) * ROW_LEN }
-  if (scan.value.row < 0 || scan.value.row >= n) scan.value = null
+  const p = { row: ((e.clientY - r.top) / r.height) * rows.value.length - 0.5, col: ((e.clientX - r.left) / r.width) * ROW_LEN }
+  hover.value = p
+  // a ring every so often while moving, one on every tap
+  const t = performance.now() / 1000
+  if (e.type === 'pointerdown' || t - lastRipple > 0.22) {
+    lastRipple = t
+    ripples.push({ ...p, t0: t })
+    if (ripples.length > 6) ripples.shift()
+  }
 }
 
 const pct = computed(() => String(Math.round(props.progress * 100)).padStart(3, '0'))
@@ -117,9 +129,10 @@ const status = computed(() => (locked.value ? 'SIGNAL LOCKED ▸ DESCEND' : S.do
 
 function tick(t: number) {
   raf = requestAnimationFrame(tick)
-  if (t - last < 50) return
+  if (t - last < 33) return
   last = t
   now.value = t / 1000
+  while (ripples.length && now.value - ripples[0].t0 > 1.4) ripples.shift()
 }
 onMounted(() => { raf = requestAnimationFrame(tick) })
 onBeforeUnmount(() => cancelAnimationFrame(raf))
@@ -128,10 +141,10 @@ onBeforeUnmount(() => cancelAnimationFrame(raf))
 <template>
   <Transition name="loader">
     <div v-if="!done" class="loader" :class="{ locked }" role="status" :aria-label="`Loading ${pct}%`">
-      <section class="shaft mono" aria-hidden="true" data-cursor="scan" @pointermove="onScan" @pointerdown="onScan" @pointerleave="scan = null">
-        <p class="hd" :class="{ scanning: scan }">┌─ {{ head }}</p>
+      <section class="shaft mono" aria-hidden="true" data-cursor="scan" @pointermove="onPointer" @pointerdown="onPointer" @pointerleave="hover = null">
+        <p class="hd">┌─ SHAFT SURVEY // SECTOR 07 ─ Z {{ alt }}m</p>
         <!-- the probe sits in a one-character box so its wider fallback glyph keeps the columns -->
-        <pre ref="shaft"><span v-for="r in rows" :key="r.tag" class="row" :class="[r.state, { at: r.at, scanned: r.scanned, near: r.near }]"><i>{{ r.tag }}</i> [{{ r.left }}<b>{{ r.gap[0] }}<u v-if="r.at" class="probe">▼</u>{{ r.gap[1] }}</b>{{ r.right }}]
+        <pre ref="shaft"><span v-for="r in rows" :key="r.tag" class="row" :class="[r.state, { at: r.at }]"><i>{{ r.tag }}</i> [{{ r.left }}<b>{{ r.gap[0] }}<u v-if="r.at" class="probe">▼</u>{{ r.gap[1] }}</b>{{ r.right }}]
 </span></pre>
         <p class="hd">└─ FLOOR ─ {{ fmt(S.maxDepth) }}m</p>
       </section>
@@ -175,10 +188,6 @@ onBeforeUnmount(() => cancelAnimationFrame(raf))
 .row.built { color: #505a5f; }
 .row.at i { color: #4d6a70; }
 .row.at b { color: var(--sodium); }
-.row.scanned i { color: var(--sodium); }
-.row.pending.near { color: #8f9a9e; }
-.row.built.near { color: #2a3236; }
-.hd.scanning { color: #4d6a70; }
 .shaft { touch-action: none; }
 .probe { display: inline-block; width: 1ch; text-decoration: none; text-align: center; overflow: visible; font-size: 0.8em; line-height: 1; }
 /* telemetry */

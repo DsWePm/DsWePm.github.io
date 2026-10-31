@@ -19,6 +19,9 @@ export const heroFrag = /* glsl */ `
   uniform sampler2D tGlyph;
   uniform sampler2D tFrameA;
   uniform sampler2D tFrameB;
+  uniform highp sampler2DArray tLow;   // every fall frame, small; layer uLowA / uLowB, or -1 for tFrameA / tFrameB
+  uniform float uLowA;
+  uniform float uLowB;
   uniform sampler2D tRain;
   uniform vec2 uRes;
   uniform float uImgAspect;
@@ -75,7 +78,9 @@ export const heroFrag = /* glsl */ `
     vec2 bend = vec2(rx - r, ry - r) * 0.012 + vec2(0.0, r * 0.003);
     vec4 col = vec4(uSeq < 1.0 ? still(iuv + bend) : vec3(0.0), 1.0);
     if (uSeq > 0.0) {
-      vec4 f = mix(texture2D(tFrameA, iuv), texture2D(tFrameB, iuv), uFrameMix);
+      vec4 fa = uLowA >= 0.0 ? texture(tLow, vec3(iuv, uLowA)) : texture2D(tFrameA, iuv);
+      vec4 fb = uLowB >= 0.0 ? texture(tLow, vec3(iuv, uLowB)) : texture2D(tFrameB, iuv);
+      vec4 f = mix(fa, fb, uFrameMix);
       col = mix(col, f, uSeq);
     }
     float lum = dot(col.rgb, vec3(0.299, 0.587, 0.114));
