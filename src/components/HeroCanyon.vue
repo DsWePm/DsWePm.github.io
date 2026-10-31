@@ -80,13 +80,17 @@ function frame() {
     hud.depth = scene.depthAt(scene.progressFrame)
   }
   // after landing, a small pull upwards springs back to the archive; only a deliberate one
-  // (past the slack) goes back up the shaft, where the stage returns and the impact re-arms
-  if (state.value === 'landed') {
-    if (scrollY < land - innerHeight * SLACK_UP) state.value = 'idle'
-    else if (l && scrollY < land - 1 && !l.isScrolling && performance.now() - lastInput > 220) l.scrollTo(land, { duration: 0.7 })
+  // (past the slack) goes back up the shaft: the black rises over the archive (the landing
+  // cut backwards), and once the screen is all black the stage returns and the impact re-arms
+  if (state.value === 'landed' && !rising) {
+    if (scrollY < land - innerHeight * SLACK_UP) {
+      rising = true
+      // (if the scroll came back down meanwhile, stay landed: the cover just lifts off the archive)
+      asciiCut.play({ dir: 'up', onCovered: () => { rising = false; if (scrollY < land - innerHeight * SLACK_UP * 0.5) state.value = 'idle' } })
+    } else if (l && scrollY < land - 1 && !l.isScrolling && performance.now() - lastInput > 220) l.scrollTo(land, { duration: 0.7 })
   }
 }
-let lastInput = 0
+let lastInput = 0, rising = false
 const markInput = () => { lastInput = performance.now() }
 
 onMounted(async () => {
