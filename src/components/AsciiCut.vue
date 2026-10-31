@@ -15,8 +15,8 @@ const lifting = ref(false)          // after a rise: the black cover fades off t
 let liftTimer = 0
 const CELL = 14
 const RAMP = ' .·:-=+*≡#%@'           // sparse -> dense
-const BAND = 9                        // rows of dissolving cells at a column's front
-const TRAIL = 5                       // rows of dark glyphs settling behind it
+const BAND = 5                        // rows of dissolving cells at a column's front
+const TRAIL = 3                       // rows of glyphs settling behind it
 const DURATION = 1.15                 // s, slowest column
 const BLACK = '#020303'
 let raf = 0
@@ -44,14 +44,19 @@ function play({ dir = 'down', onCovered }: CutOptions = {}) {
     drift = Math.min(1, Math.max(0, drift + (Math.random() - 0.5) * 0.35))
     return { delay: drift * 0.32 + Math.random() * 0.06, dur: 0.55 + Math.random() * 0.2 }
   })
-  // the trail settles into the page underneath: dark ink on the day archive, light at night
-  const ink = theme.value === 'dark' ? '190,198,201' : '42,50,54'
+  // the trail settles into the page underneath in its own ink (dark by day, light at night);
+  // the glyph cells in the band are the page's negative, so they read the same in both modes:
+  // dark cells with light glyphs on the day archive, light cells with dark glyphs at night
+  const night = theme.value === 'dark'
+  const ink = night ? '190,198,201' : '42,50,54'
+  const cellBg = night ? '200,208,210' : '2,3,3'
+  const cellInk = night ? '16,20,23' : '232,236,236'
   const up = dir === 'up'
   const t0 = performance.now()
 
   const frame = (now: number) => {
     const t = (now - t0) / 1000
-    const tick = Math.floor(t * 12)          // glyphs re-roll a dozen times a second
+    const tick = Math.floor(t * 30)          // glyphs re-roll 30 times a second
     ctx.clearRect(0, 0, w, h)
     let alive = false
     cols.forEach((col, i) => {
@@ -78,10 +83,10 @@ function play({ dir = 'down', onCovered }: CutOptions = {}) {
         // in the band each cell flips at its own threshold: black, then a glyph cell, then clear
         if (r > p * 1.25 + 0.12) { ctx.fillStyle = BLACK; ctx.fillRect(x, y * CELL, CELL, CELL); continue }
         if (r > p * 1.25 - 0.22) {
-          ctx.fillStyle = `rgba(2,3,3,${(0.92 - p * 0.5).toFixed(3)})`
+          ctx.fillStyle = `rgba(${cellBg},${(0.92 - p * 0.5).toFixed(3)})`
           ctx.fillRect(x, y * CELL, CELL, CELL)
-          ctx.fillStyle = `rgba(232,236,236,${(0.95 - p * 0.35).toFixed(3)})`
-          ctx.fillText(g((1 - p) * 0.85 + hash(i + tick, y) * 0.3), x + 1, y * CELL)
+          ctx.fillStyle = `rgba(${cellInk},${(0.95 - p * 0.35).toFixed(3)})`
+          ctx.fillText(g((1 - p) * 0.5 + hash(i * 3 + tick, y) * 0.6), x + 1, y * CELL)
         }
       }
     })
