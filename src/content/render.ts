@@ -59,7 +59,7 @@ md.renderer.rules.image = (tokens, i) => {
   if (/\.(mp4|webm|mov|m4v)(\?|#|$)/i.test(src)) {
     return `<span class="fig video"><video src="${s}" controls playsinline muted loop preload="metadata"></video>${cap}</span>`
   }
-  return `<span class="fig"><img src="${s}" alt="${alt}" loading="lazy">${cap}</span>`
+  return `<span class="fig"><a class="zoom" href="${s}" target="_blank" rel="noopener" data-cursor="view" aria-label="Open the original image"><img src="${s}" alt="${alt}" loading="lazy"></a>${cap}</span>`
 }
 
 // links out of the site open in a new tab (the stylesheet marks them ↗)

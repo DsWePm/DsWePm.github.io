@@ -293,7 +293,9 @@ onBeforeUnmount(() => { cancelAnimationFrame(raf); cancelPlate(); document.title
 .prose p { margin: 0 0 1.25em; }
 .prose a { color: var(--accent); border-bottom: 1px dashed var(--accent-dim); }
 .prose a:hover { color: var(--mist); }
-.prose a[target='_blank']::after { content: ' ↗'; font-size: 0.8em; color: var(--accent-dim); }
+.prose a[target='_blank']:not(.zoom)::after { content: ' ↗'; font-size: 0.8em; color: var(--accent-dim); }
+/* a figure's image opens the original in a new tab (tap to zoom on a phone) */
+.prose .fig a.zoom { display: block; border: 0; }
 .prose .fig video { display: block; width: 100%; height: auto; background: #0d1013; }
 .prose .fig.embed .frame { position: relative; display: block; aspect-ratio: 16 / 9; background: #0d1013; }
 .prose .fig.embed iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
@@ -336,6 +338,9 @@ onBeforeUnmount(() => { cancelAnimationFrame(raf); cancelPlate(); document.title
 .prose .fig::before { top: -4px; left: -4px; border-right: 0; border-bottom: 0; }
 .prose .fig::after { bottom: -4px; right: -4px; border-left: 0; border-top: 0; }
 .prose .fig img { display: block; width: 100%; height: auto; filter: saturate(0.7); }
+/* small portrait clips (real-car video excerpts) keep a sensible size instead of stretching across the column */
+.prose .fig img[src$='real-board.gif'] { width: 348px; max-width: 100%; margin: 0 auto; }
+.prose .fig img[src$='real-chain.gif'] { width: 300px; max-width: 100%; margin: 0 auto; }
 .prose .fig .cap { display: block; padding: 10px 2px 0; font: 11px/1.5 var(--font-mono); letter-spacing: 0.08em; color: var(--fog-dim); }
 .prose .fig .cap::before { content: 'FIG.' counter(fig, decimal-leading-zero) ' ── '; color: var(--accent); }
 .prose .fig.video .cap::before, .prose .fig.embed .cap::before { content: 'REC.' counter(fig, decimal-leading-zero) ' ── '; }
