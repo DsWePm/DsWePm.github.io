@@ -7,9 +7,9 @@ tags: reinforcement-learning, sac, behavior-cloning, simulation
 summary: PID control, Soft Actor-Critic and behaviour cloning trained a car to follow lanes and avoid obstacles; on 200 fixed simulation scenes the task score rose from 60.03 to 72.85 and collision episodes fell from 64 to 9.
 ---
 
-A personal project: teach a simulated car to follow lanes and avoid obstacles, comparing combinations of classic control, reinforcement learning and imitation learning.
+The aim is to teach a simulated car to follow lanes and avoid obstacles, comparing combinations of classic control, reinforcement learning and imitation learning.
 
-## What I did
+## What was done
 
 - Trained the car on lane following and obstacle avoidance by combining PID control, SAC and behaviour cloning
 - Used staged demonstrations with a continuous imitation constraint, for **1 million steps** of environment interaction

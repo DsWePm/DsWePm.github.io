@@ -7,7 +7,7 @@ tags: reinforcement-learning, sac, behavior-cloning, simulation
 summary: 结合 PID 控制、Soft Actor-Critic 与行为克隆训练小车循迹避障；在 200 个固定仿真场景上任务分从 60.03 提升到 72.85，碰撞回合从 64 降到 9。
 ---
 
-一个个人项目：让仿真中的小车学会循迹和避障，比较经典控制、强化学习和模仿学习的组合。
+让仿真中的小车学会循迹和避障，比较经典控制、强化学习和模仿学习的组合。
 
 ## 做了什么
 
