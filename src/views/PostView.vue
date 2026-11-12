@@ -13,6 +13,7 @@ import { theme, tr } from '../composables/prefs'
 import ScrambleText from '../components/ScrambleText.vue'
 import AsciiField from '../components/AsciiField.vue'
 import SiteFooter from '../components/SiteFooter.vue'
+import ImageLightbox from '../components/ImageLightbox.vue'
 
 // A post, opened like a file pulled from the archive: a dark header (the
 // city's palette) with the file's ASCII plate and HUD readouts, a dithered
@@ -39,6 +40,7 @@ const older = computed(() => list.value[i.value + 1])
 const host = (u: string) => u.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')
 
 const article = ref<HTMLElement>()
+const lightbox = ref<InstanceType<typeof ImageLightbox>>()
 const plate = ref('')
 const activeId = ref('')
 const progress = ref(0)
@@ -94,6 +96,18 @@ function backToIndex() {
 }
 
 function onArticleClick(e: MouseEvent) {
+  // a figure opens in the viewer over the page (ctrl/cmd/shift-click still opens the picture in a new tab)
+  const z = (e.target as HTMLElement).closest<HTMLAnchorElement>('a.zoom')
+  if (z && article.value && e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+    e.preventDefault()
+    const zooms = [...article.value.querySelectorAll<HTMLAnchorElement>('a.zoom')]
+    const figs = [...article.value.querySelectorAll('.fig')]
+    lightbox.value?.show(zooms.map((l) => {
+      const fig = l.closest('.fig')
+      return { src: l.href, alt: l.querySelector('img')?.alt ?? '', label: `FIG.${pad(figs.indexOf(fig!) + 1)}`, cap: fig?.querySelector('.cap')?.textContent?.trim() ?? '' }
+    }), zooms.indexOf(z), z)
+    return
+  }
   // links to other pages of this site stay in the app (and get the cut)
   const a = (e.target as HTMLElement).closest<HTMLAnchorElement>('a[data-route]')
   if (a && !e.metaKey && !e.ctrlKey) { e.preventDefault(); router.push(a.dataset.route!); return }
@@ -211,6 +225,8 @@ onBeforeUnmount(() => { cancelAnimationFrame(raf); cancelPlate(); document.title
       </p>
       <SiteFooter />
     </main>
+
+    <ImageLightbox ref="lightbox" />
 
     <button type="button" class="to-top mono" :class="{ on: showTop }" aria-label="Back to top" data-cursor="button" @click="toTop">
       <span class="bk" aria-hidden="true">┌</span>
@@ -338,7 +354,7 @@ onBeforeUnmount(() => { cancelAnimationFrame(raf); cancelPlate(); document.title
 .prose a { color: var(--accent); border-bottom: 1px dashed var(--accent-dim); }
 .prose a:hover { color: var(--mist); }
 .prose a[target='_blank']:not(.zoom)::after { content: ' ↗'; font-size: 0.8em; color: var(--accent-dim); }
-/* a figure's image opens the original in a new tab (tap to zoom on a phone) */
+/* a figure's image opens in the viewer over the page (ctrl/cmd-click: the original in a new tab) */
 .prose .fig a.zoom { display: block; border: 0; }
 .prose .fig video { display: block; width: 100%; height: auto; background: #0d1013; }
 .prose .fig.embed .frame { position: relative; display: block; aspect-ratio: 16 / 9; background: #0d1013; }
@@ -391,7 +407,7 @@ onBeforeUnmount(() => { cancelAnimationFrame(raf); cancelPlate(); document.title
   .prose .fig img[src*='/notes/']:not([src*='real-']) { width: 680px; max-width: none; }
 }
 @media (hover: none) {
-  .prose .fig a.zoom + .cap::after { content: '  ·  TAP THE IMAGE TO OPEN IT FULL SIZE'; color: var(--accent-dim); }
+  .prose .fig a.zoom + .cap::after { content: '  ·  TAP THE IMAGE TO ENLARGE'; color: var(--accent-dim); }
 }
 /* small portrait clips (real-car video excerpts) keep a sensible size instead of stretching across the column */
 .prose .fig img[src$='real-board.gif'] { width: 348px; max-width: 100%; margin: 0 auto; }
