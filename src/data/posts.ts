@@ -16,6 +16,9 @@
 //   repo:     https://github.com/you/name   (its name also pulls stars from repos.json)
 //   demo:     https://...
 //   cover:    images/cover.jpg       (under public/, shown on the card)
+//   parent:   some-project           (a note that belongs to that project: it gets no card of its own,
+//                                     is listed on the project's page and opens from there)
+//   order:    1                      (with parent: reading order among the project's notes)
 //
 // English: put the translation beside it as <slug>.en.md (same front matter,
 // translated title / summary / tags / body). Without one, the Chinese file is
@@ -48,6 +51,8 @@ export interface Entry {
   cover?: string
   stars?: number
   language?: string
+  parent?: string         // projects only: the slug of the project this note belongs to
+  order?: number
 }
 
 const files: Record<Collection, Record<string, string>> = {
@@ -86,6 +91,8 @@ function parse(collection: Collection, path: string, raw: string): Omit<Entry, '
     cover: meta.cover || undefined,
     stars: gh?.stars,
     language: gh?.language,
+    parent: collection === 'projects' ? meta.parent || undefined : undefined,
+    order: meta.order ? Number(meta.order) : undefined,
   }
 }
 
@@ -98,24 +105,39 @@ function load(collection: Collection, prefix: string, l: Lang): Entry[] {
     v[/\.en\.md$/.test(p) ? 'en' : 'zh'] = e
     bySlug.set(e.slug, v)
   }
-  return [...bySlug.values()].map((v) => (v[l] ?? v.zh ?? v.en)!)
+  const sorted = [...bySlug.values()].map((v) => (v[l] ?? v.zh ?? v.en)!)
     .filter((e) => import.meta.env.DEV || !e.draft)
     .sort((a, b) => a.date.localeCompare(b.date))
-    .map((e, i) => ({ ...e, code: `${prefix}-${String(i + 1).padStart(3, '0')}` }))
-    .reverse()                                     // oldest gets 001; listed newest first
+  // codes count the top-level entries only; a note takes its project's code plus its place: PRJ-004.2
+  let n = 0
+  const coded = sorted.map((e) => ({ ...e, code: e.parent ? '' : `${prefix}-${String(++n).padStart(3, '0')}` }))
+  const place = new Map<string, number>()
+  for (const e of coded.filter((x) => x.parent).sort((a, b) => (a.order ?? 99) - (b.order ?? 99) || a.date.localeCompare(b.date))) {
+    const k = (place.get(e.parent!) ?? 0) + 1
+    place.set(e.parent!, k)
+    e.code = `${coded.find((x) => x.slug === e.parent)?.code ?? prefix}.${k}`
+  }
+  return coded.reverse()                           // oldest gets 001; listed newest first
 }
 
-// reactive and refilled in place when the language changes, so every list re-renders
+// reactive and refilled in place when the language changes, so every list re-renders.
+// entries.projects holds the projects only; their notes live in projectNotes.
 export const entries = reactive<Record<Collection, Entry[]>>({ log: [], projects: [] })
+export const projectNotes = reactive<Entry[]>([])
 function fill(l: Lang) {
   entries.log.splice(0, entries.log.length, ...load('log', 'LOG', l))
-  entries.projects.splice(0, entries.projects.length, ...load('projects', 'PRJ', l))
+  const all = load('projects', 'PRJ', l)
+  entries.projects.splice(0, entries.projects.length, ...all.filter((e) => !e.parent))
+  projectNotes.splice(0, projectNotes.length, ...all.filter((e) => e.parent))
 }
 fill(lang.value)
 watch(lang, fill)
 export const posts = entries.log
 
-export const entryBy = (c: Collection, slug: string) => entries[c].find((e) => e.slug === slug)
+export const entryBy = (c: Collection, slug: string) =>
+  entries[c].find((e) => e.slug === slug) ?? (c === 'projects' ? projectNotes.find((e) => e.slug === slug) : undefined)
+/** a project's notes, in reading order (first note first) */
+export const notesOf = (slug: string) => projectNotes.filter((e) => e.parent === slug).sort((a, b) => (a.order ?? 99) - (b.order ?? 99) || a.date.localeCompare(b.date))
 export const postForDossier = (code: string) => posts.find((p) => p.dossier === code)
 export const pathOf = (e: Entry) => `/${e.collection}/${e.slug}`
 

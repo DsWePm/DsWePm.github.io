@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { entries, entryBy, pathOf, type Collection } from '../data/posts'
+import { entries, entryBy, notesOf, pathOf, type Collection } from '../data/posts'
 import { filters } from '../composables/filters'
 import { dossiers, profile } from '../data/profile'
 import { art } from '../data/asciiArt'
@@ -23,12 +23,16 @@ const BASE = import.meta.env.BASE_URL
 const route = useRoute()
 const router = useRouter()
 const collection = computed(() => (route.meta.collection as Collection) ?? 'log')
-const list = computed(() => entries[collection.value])
-const section = computed(() => (collection.value === 'projects' ? 'PROJECTS' : 'LOG'))
 const post = computed(() => entryBy(collection.value, String(route.params.slug)))
+// a note of a project: its neighbours are the project's other notes, and it points back to the project
+const parent = computed(() => (post.value?.parent ? entryBy('projects', post.value.parent) : undefined))
+const list = computed(() => (post.value?.parent ? notesOf(post.value.parent).reverse() : entries[collection.value]))   // newest (last note) first
+const section = computed(() => (post.value?.parent ? 'NOTES' : collection.value === 'projects' ? 'PROJECTS' : 'LOG'))
+// a project page ends with the list of its notes, in reading order
+const notes = computed(() => (post.value && !post.value.parent ? notesOf(post.value.slug) : []))
 const doc = computed(() => (post.value ? render(post.value.body) : { html: '', headings: [] }))
 const dossier = computed(() => dossiers.find((d) => d.code === post.value?.dossier))
-const kind = computed(() => ({ skill: 'SKILL FILE', note: 'FIELD NOTE', project: 'PROJECT' })[post.value?.kind ?? 'note'])
+const kind = computed(() => (post.value?.parent ? 'PROJECT NOTE' : ({ skill: 'SKILL FILE', note: 'FIELD NOTE', project: 'PROJECT' })[post.value?.kind ?? 'note']))
 const i = computed(() => list.value.findIndex((p) => p.slug === post.value?.slug))
 const newer = computed(() => list.value[i.value - 1])
 const older = computed(() => list.value[i.value + 1])
@@ -127,7 +131,9 @@ onBeforeUnmount(() => { cancelAnimationFrame(raf); cancelPlate(); document.title
       <div class="inner">
         <p class="crumbs mono">
           <a :href="BASE" @click.prevent="toSection(collection)">◀ ARCHIVE</a>
-          <span>/</span><span>{{ section }}</span><span>/</span><span>{{ post.category.label }}</span><span>/</span><span class="cur">{{ post.code }}</span>
+          <span>/</span><span>{{ collection === 'projects' ? 'PROJECTS' : 'LOG' }}</span><span>/</span><span>{{ post.category.label }}</span>
+          <template v-if="parent"><span>/</span><RouterLink :to="pathOf(parent)">{{ parent.code }}</RouterLink></template>
+          <span>/</span><span class="cur">{{ post.code }}</span>
           <span class="rule" aria-hidden="true" />
           <span class="rec">● OPEN</span>
         </p>
@@ -143,6 +149,9 @@ onBeforeUnmount(() => { cancelAnimationFrame(raf); cancelPlate(); document.title
           <div v-if="post.stars !== undefined"><dt>STARS</dt><dd>★ {{ post.stars }}</dd></div>
           <div class="tags"><dt>TAGS</dt><dd><span v-for="t in post.tags" :key="t">#{{ t }}</span></dd></div>
         </dl>
+        <p v-if="parent" class="links mono">
+          <RouterLink :to="pathOf(parent)" data-cursor="open">[ ◀ PROJECT ── {{ parent.title }} ]</RouterLink>
+        </p>
         <p v-if="post.repo || post.demo" class="links mono">
           <a v-if="post.repo" :href="post.repo" target="_blank" rel="noopener">[ SOURCE ── {{ host(post.repo) }} ↗ ]</a>
           <a v-if="post.demo" :href="post.demo" target="_blank" rel="noopener">[ VIEW ── {{ host(post.demo) }} ↗ ]</a>
@@ -166,8 +175,24 @@ onBeforeUnmount(() => { cancelAnimationFrame(raf); cancelPlate(); document.title
           <p class="toc-foot">└─ [{{ bar }}] {{ String(Math.round(progress * 100)).padStart(3, '0') }}%</p>
         </aside>
 
-        <!-- eslint-disable-next-line vue/no-v-html -->
-        <article ref="article" class="prose" @click="onArticleClick" v-html="doc.html" />
+        <div class="col">
+          <!-- eslint-disable-next-line vue/no-v-html -->
+          <article ref="article" class="prose" @click="onArticleClick" v-html="doc.html" />
+
+          <section v-if="notes.length" class="notes" aria-label="Project notes">
+            <p class="notes-head mono">── PROJECT NOTES · {{ pad(notes.length) }}</p>
+            <ol>
+              <li v-for="n in notes" :key="n.slug">
+                <RouterLink :to="pathOf(n)" data-cursor="open">
+                  <span class="nc mono">{{ n.code }}</span>
+                  <span class="nt">{{ n.title }}</span>
+                  <span class="ns">{{ n.summary }}</span>
+                  <span class="nm mono">{{ n.date }} · {{ pad(n.minutes) }} MIN</span>
+                </RouterLink>
+              </li>
+            </ol>
+          </section>
+        </div>
       </div>
 
       <nav class="adjacent" aria-label="More files">
@@ -180,7 +205,10 @@ onBeforeUnmount(() => { cancelAnimationFrame(raf); cancelPlate(); document.title
         </RouterLink>
         <span v-else class="adj none mono r">END OF {{ section }} ──</span>
       </nav>
-      <p class="back mono"><a :href="BASE" @click.prevent="backToIndex">[ ◀ RETURN TO ARCHIVE ]</a></p>
+      <p class="back mono">
+        <RouterLink v-if="parent" :to="pathOf(parent)" data-cursor="open">[ ◀ BACK TO THE PROJECT ]</RouterLink>
+        <a :href="BASE" @click.prevent="backToIndex">[ ◀ RETURN TO ARCHIVE ]</a>
+      </p>
       <SiteFooter />
     </main>
 
@@ -262,6 +290,22 @@ onBeforeUnmount(() => { cancelAnimationFrame(raf); cancelPlate(); document.title
 .toc li.on a { color: var(--mist); transform: translateX(4px); }
 .toc li.on .n { color: var(--accent); }
 
+.col { min-width: 0; }
+.notes { margin: 3.2em 0 0; padding-top: 1.1em; border-top: 1px solid var(--line); }
+.notes-head { margin: 0 0 6px; font-size: 11px; letter-spacing: 0.2em; color: var(--accent); }
+.notes ol { list-style: none; margin: 0; padding: 0; }
+.notes li { border-bottom: 1px dashed var(--line); }
+.notes a { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 6px 18px; padding: 20px 0; color: var(--fog); transition: color 0.25s; }
+.notes a:hover { color: var(--mist); }
+.notes .nc { grid-row: 1 / span 3; padding-top: 7px; font-size: 11px; letter-spacing: 0.12em; color: var(--accent); }
+.notes .nt { font: 300 21px/1.4 var(--font-sans); color: var(--mist); }
+.notes .ns { font-size: 14px; line-height: 1.75; }
+.notes .nm { font-size: 10.5px; letter-spacing: 0.14em; color: var(--fog-dim); }
+@media (max-width: 640px) {
+  .notes a { grid-template-columns: minmax(0, 1fr); }
+  .notes .nc { grid-row: auto; padding-top: 0; }
+}
+
 .adjacent { position: relative; z-index: 1; display: grid; grid-template-columns: 1fr 1fr; max-width: 1360px; margin: 120px auto 0; padding: 0 var(--gutter); }
 .adj { display: flex; flex-direction: column; gap: 10px; padding: 28px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); color: var(--fog); transition: color 0.3s; }
 .adj.next, .adj.r { text-align: right; align-items: flex-end; border-left: 1px dashed var(--line); }
@@ -269,7 +313,7 @@ onBeforeUnmount(() => { cancelAnimationFrame(raf); cancelPlate(); document.title
 .adj .t { font: 300 22px/1.3 var(--font-sans); color: var(--mist); }
 .adj:hover { color: var(--mist); }
 .adj.none { font-size: 11px; letter-spacing: 0.16em; color: var(--fog-dim); justify-content: center; }
-.back { position: relative; z-index: 1; text-align: center; margin: 56px 0 0; font-size: 11px; letter-spacing: 0.18em; color: var(--accent); }
+.back { position: relative; z-index: 1; text-align: center; margin: 56px 0 0; font-size: 11px; letter-spacing: 0.18em; color: var(--accent); display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 26px; }
 
 .missing { min-height: 100vh; display: grid; place-content: center; text-align: center; background: var(--paper); color: var(--fog); }
 .missing pre { color: var(--accent); }
@@ -338,6 +382,17 @@ onBeforeUnmount(() => { cancelAnimationFrame(raf); cancelPlate(); document.title
 .prose .fig::before { top: -4px; left: -4px; border-right: 0; border-bottom: 0; }
 .prose .fig::after { bottom: -4px; right: -4px; border-left: 0; border-top: 0; }
 .prose .fig img { display: block; width: 100%; height: auto; filter: saturate(0.7); }
+/* the notes' figures are drawn for print (white ground, colour-blind-safe palette): show them as drawn */
+.prose .fig img[src*='/notes/'] { filter: none; }
+/* on a phone a wide figure scrolls sideways at a readable size instead of shrinking its text to nothing;
+   the real-car clips are small portrait GIFs and keep their own width */
+@media (max-width: 640px) {
+  .prose .fig a.zoom { overflow-x: auto; }
+  .prose .fig img[src*='/notes/']:not([src*='real-']) { width: 680px; max-width: none; }
+}
+@media (hover: none) {
+  .prose .fig a.zoom + .cap::after { content: '  ·  TAP THE IMAGE TO OPEN IT FULL SIZE'; color: var(--accent-dim); }
+}
 /* small portrait clips (real-car video excerpts) keep a sensible size instead of stretching across the column */
 .prose .fig img[src$='real-board.gif'] { width: 348px; max-width: 100%; margin: 0 auto; }
 .prose .fig img[src$='real-chain.gif'] { width: 300px; max-width: 100%; margin: 0 auto; }
